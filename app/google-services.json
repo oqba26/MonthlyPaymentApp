@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "302483616421",
+    "project_id": "monthlypaymentapp-c52fc",
+    "storage_bucket": "monthlypaymentapp-c52fc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:302483616421:android:c1ba5fe18311c90a0ad34c",
+        "android_client_info": {
+          "package_name": "com.oqba26.monthlypaymentapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBzOX1K1dIKlaOk1VlL0fwzsmffosc4N88"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:302483616421:android:e3f9eab928a121b90ad34c",
+        "android_client_info": {
+          "package_name": "com.oqba26.monthlypaymentmanagement2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBzOX1K1dIKlaOk1VlL0fwzsmffosc4N88"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
