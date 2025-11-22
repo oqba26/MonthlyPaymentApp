@@ -33,4 +33,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "MonthlyPaymentApp"
-include(":app")
+include(":app", ":PersianDate")

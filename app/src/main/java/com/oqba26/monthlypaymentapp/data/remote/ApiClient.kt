@@ -22,8 +22,7 @@ class ApiClient(settingsRepository: SettingsRepository) {
     private val authInterceptor = AuthInterceptor(settingsRepository)
 
     private val logging = HttpLoggingInterceptor().apply {
-        level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
-        else HttpLoggingInterceptor.Level.NONE
+        level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
     }
 
     // ⭐️ افزودن AuthInterceptor به OkHttpClient

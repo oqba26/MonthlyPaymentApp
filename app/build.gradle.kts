@@ -47,14 +47,14 @@ android {
     }
 
     compileOptions {
-        // هم‌تراز با JDK 17
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        // Align with the JDK version used by Android Studio
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
         isCoreLibraryDesugaringEnabled = true
     }
-    kotlinOptions { jvmTarget = "17" }
-    // اطمینان از JDK 17
-    kotlin { jvmToolchain(17) }
+    kotlinOptions { jvmTarget = "21" }
+    // Ensure JDK 21
+    kotlin { jvmToolchain(21) }
 
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
@@ -72,7 +72,9 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.navigation.compose)
+    implementation("androidx.compose.material:material") // برای PullRefresh
     implementation("androidx.compose.material:material-icons-extended-android:1.6.7")
+    implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
 
     // Core & Coroutines
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
@@ -98,7 +100,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     // Utility
-    implementation(libs.persiandate)
+    implementation(project(":PersianDate"))
     implementation(libs.google.material)
 
     // Desugaring

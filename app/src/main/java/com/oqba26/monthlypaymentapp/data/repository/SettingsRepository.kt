@@ -19,7 +19,6 @@ class SettingsRepository(context: Context) {
     companion object {
         val DEFAULT_PAYMENT_AMOUNT = doublePreferencesKey("default_payment_amount")
         val SELECTED_FONT_NAME = stringPreferencesKey("selected_font_name")
-        // ⭐️ جدید: کلیدهای مربوط به احراز هویت
         val AUTH_TOKEN_KEY = stringPreferencesKey("auth_token")
         val USER_ID_KEY = stringPreferencesKey("user_id")
 
@@ -27,7 +26,6 @@ class SettingsRepository(context: Context) {
         const val DEFAULT_FONT = "Estedad"
     }
 
-    // --- جریان‌های تنظیمات عمومی ---
     val defaultPaymentAmountFlow: Flow<Double> = dataStore.data.map {
         it[DEFAULT_PAYMENT_AMOUNT] ?: FALLBACK_AMOUNT
     }
@@ -44,19 +42,15 @@ class SettingsRepository(context: Context) {
         dataStore.edit { it[SELECTED_FONT_NAME] = fontName }
     }
 
-
-    // --- جریان‌ها و متدهای مربوط به احراز هویت ---
     val authTokenFlow: Flow<String?> = dataStore.data.map {
         it[AUTH_TOKEN_KEY]
     }
 
+    @Suppress("unused")
     val userIdFlow: Flow<String?> = dataStore.data.map {
         it[USER_ID_KEY]
     }
 
-    /**
-     * توکن و ID کاربر را ذخیره می‌کند. برای پاک کردن، null ارسال کنید.
-     */
     suspend fun saveAuthData(token: String?, userId: String?) {
         dataStore.edit { preferences ->
             if (token != null) {

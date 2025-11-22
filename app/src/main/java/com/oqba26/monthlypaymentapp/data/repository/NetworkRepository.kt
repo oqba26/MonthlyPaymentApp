@@ -45,23 +45,20 @@ class NetworkRepository(private val api: ApiService) {
     suspend fun addPerson(person: Person): Int? {
         return try {
             val trimmed = person.name.trim()
-            if (trimmed.isEmpty()) return 400 // Bad request from client side
+            if (trimmed.isEmpty()) return 400
             val resp = api.addPerson(person.copy(name = trimmed))
-            if (resp.isSuccessful) refresh()
-            resp.code() // Return the actual HTTP status code
+            resp.code()
         } catch (e: HttpException) {
-            e.code() // Return the HTTP error code (e.g., 409)
+            e.code()
         } catch (e: Exception) {
             Log.e("API", "addPerson error", e)
-            null // Return null for non-HTTP errors
+            null
         }
     }
 
     suspend fun deletePersonAndPayments(personId: String): Boolean {
         return try {
-            val resp = api.deletePersonAndPayments(personId)
-            if (resp.isSuccessful) refresh()
-            resp.isSuccessful
+            api.deletePersonAndPayments(personId).isSuccessful
         } catch (e: Exception) {
             Log.e("API", "deletePersonAndPayments error", e); false
         }
@@ -71,12 +68,37 @@ class NetworkRepository(private val api: ApiService) {
         return try {
             val trimmed = name.trim()
             if (trimmed.isEmpty()) return false
-            val personUpdate = Person(id = personId, name = trimmed)
-            val resp = api.updatePerson(personId, personUpdate)
-            if (resp.isSuccessful) refresh()
-            resp.isSuccessful
+            // Note: displayOrder is not updated here, only the name.
+            val personUpdate = Person(id = personId, name = trimmed, displayOrder = 0)
+            api.updatePerson(personId, personUpdate).isSuccessful
         } catch (e: Exception) {
             Log.e("API", "updatePerson error", e); false
+        }
+    }
+
+    suspend fun updatePersonArchivedStatus(personId: String, isArchived: Boolean): Boolean {
+        return try {
+            api.updatePersonArchivedStatus(personId, mapOf("isArchived" to isArchived)).isSuccessful
+        } catch (e: Exception) {
+            Log.e("API", "updatePersonArchivedStatus error", e); false
+        }
+    }
+
+    suspend fun updatePersonDisplayOrder(personId: String, displayOrder: Long): Boolean {
+        return try {
+            api.updatePersonDisplayOrder(personId, mapOf("displayOrder" to displayOrder)).isSuccessful
+        } catch (e: Exception) {
+            Log.e("API", "updatePersonDisplayOrder error", e); false
+        }
+    }
+
+    @Suppress("unused")
+    suspend fun rebalanceDisplayOrders(): Boolean {
+        return try {
+            api.rebalanceDisplayOrders().isSuccessful
+        } catch (e: Exception) {
+            Log.e("API", "rebalanceDisplayOrders error", e)
+            false
         }
     }
 
@@ -85,9 +107,7 @@ class NetworkRepository(private val api: ApiService) {
     // --- Payment Operations ---
     suspend fun addPayment(paymentRecord: PaymentRecord): Boolean {
         return try {
-            val resp = api.addPayment(paymentRecord)
-            if (resp.isSuccessful) refresh()
-            resp.isSuccessful
+            api.addPayment(paymentRecord).isSuccessful
         } catch (e: Exception) {
             Log.e("API", "addPayment error", e); false
         }
@@ -95,9 +115,7 @@ class NetworkRepository(private val api: ApiService) {
 
     suspend fun deletePayment(paymentId: String): Boolean {
         return try {
-            val resp = api.deletePayment(paymentId)
-            if (resp.isSuccessful) refresh()
-            resp.isSuccessful
+            api.deletePayment(paymentId).isSuccessful
         } catch (e: Exception) {
             Log.e("API", "deletePayment error", e); false
         }

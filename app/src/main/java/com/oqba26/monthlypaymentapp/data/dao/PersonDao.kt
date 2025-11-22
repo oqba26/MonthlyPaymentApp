@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface PersonDao {
 
-    @Query("SELECT * FROM persons ORDER BY name COLLATE NOCASE ASC")
+    @Query("SELECT * FROM persons ORDER BY displayOrder ASC")
     fun getAllPersonsFlow(): Flow<List<Person>>
 
     @Query("SELECT * FROM persons WHERE id = :id LIMIT 1")
@@ -18,6 +18,12 @@ interface PersonDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(persons: List<Person>)
+
+    @Query("UPDATE persons SET isArchived = :isArchived WHERE id = :personId")
+    suspend fun updateArchivedStatus(personId: String, isArchived: Boolean)
+
+    @Query("UPDATE persons SET displayOrder = :displayOrder WHERE id = :personId")
+    suspend fun updateDisplayOrder(personId: String, displayOrder: Int)
 
     @Query("DELETE FROM persons")
     suspend fun deleteAll()

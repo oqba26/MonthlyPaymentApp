@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.serialization.InternalSerializationApi::class)
+
 package com.oqba26.monthlypaymentapp.data.model
 
 import androidx.room.Entity
@@ -12,5 +14,6 @@ data class PaymentRecord(
     val amount: Double,
     val shamsiYear: Int,
     val shamsiMonth: Int,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val description: String = ""
 )

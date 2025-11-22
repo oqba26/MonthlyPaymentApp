@@ -8,6 +8,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -32,6 +33,15 @@ interface ApiService {
     // ⭐️ NEW: مسیر PUT برای ویرایش نام
     @PUT("persons/{id}")
     suspend fun updatePerson(@Path("id") personId: String, @Body person: Person): Response<Unit>
+
+    @PATCH("persons/{id}/archived")
+    suspend fun updatePersonArchivedStatus(@Path("id") personId: String, @Body isArchived: Map<String, Boolean>): Response<Unit>
+
+    @PATCH("persons/{id}/display-order")
+    suspend fun updatePersonDisplayOrder(@Path("id") personId: String, @Body displayOrder: Map<String, Long>): Response<Unit>
+
+    @POST("persons/rebalance")
+    suspend fun rebalanceDisplayOrders(): Response<Unit>
 
     @DELETE("persons/{id}")
     suspend fun deletePersonAndPayments(@Path("id") personId: String): Response<Unit>

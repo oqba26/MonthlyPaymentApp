@@ -1,3 +1,5 @@
+@file:Suppress("unused")
+
 package com.oqba26.monthlypaymentapp.data.database
 
 import android.content.Context
@@ -14,7 +16,7 @@ import java.util.UUID
 
 @Database(
     entities = [Person::class, PaymentRecord::class],
-    version = 11, // حتماً نسخه را بالا ببری که اسکیمای جدید اعمال شود
+    version = 13, // حتماً نسخه را بالا ببری که اسکیمای جدید اعمال شود
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -27,7 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
         // تمیزکاری قبل از درج بکاپ
         val safePersons = backupData.persons.map { p ->
             val name = p.name.trim()
-            val id = if (p.id.isNotBlank()) p.id else UUID.randomUUID().toString()
+            val id = p.id.ifBlank { UUID.randomUUID().toString() }
             Person(id = id, name = name)
         }
         personDao().deleteAll()
