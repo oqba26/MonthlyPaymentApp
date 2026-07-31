@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.oqba26.monthlypaymentapp.data.model.BackupData
 import com.oqba26.monthlypaymentapp.data.repository.LocalPersonRepository
 import com.oqba26.monthlypaymentapp.data.repository.SettingsRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +16,8 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-class SettingsViewModel(
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val localPersonRepository: LocalPersonRepository
 ) : ViewModel() {
@@ -32,8 +35,48 @@ class SettingsViewModel(
     val selectedFont: StateFlow<String> = settingsRepository.selectedFontFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), SettingsRepository.DEFAULT_FONT)
 
+    val reminderDay: StateFlow<Int?> = settingsRepository.reminderDayFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), null)
+
+    val cardNumbers: StateFlow<List<String>> = settingsRepository.cardNumbersFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+
     private val _toastMessage = MutableSharedFlow<String>()
     val toastMessage = _toastMessage.asSharedFlow()
+
+    fun saveReminderDay(day: String) {
+        viewModelScope.launch {
+            val dayInt = day.toIntOrNull()
+            if (dayInt == null || dayInt in 1..31) {
+                settingsRepository.saveReminderDay(dayInt)
+                _toastMessage.emit(if (dayInt == null) "یادآور غیرفعال شد" else "یادآور برای روز $day ماه تنظیم شد")
+            } else {
+                _toastMessage.emit("روز وارد شده نامعتبر است (۱ تا ۳۱)")
+            }
+        }
+    }
+
+    fun addCardNumber(cardNumber: String) {
+        viewModelScope.launch {
+            if (cardNumber.isBlank()) return@launch
+            val current = cardNumbers.value.toMutableList()
+            if (!current.contains(cardNumber)) {
+                current.add(cardNumber)
+                settingsRepository.saveCardNumbers(current)
+                _toastMessage.emit("شماره کارت اضافه شد")
+            }
+        }
+    }
+
+    fun removeCardNumber(cardNumber: String) {
+        viewModelScope.launch {
+            val current = cardNumbers.value.toMutableList()
+            if (current.remove(cardNumber)) {
+                settingsRepository.saveCardNumbers(current)
+                _toastMessage.emit("شماره کارت حذف شد")
+            }
+        }
+    }
 
     fun saveDefaultPaymentAmount(amount: String) {
         viewModelScope.launch {
@@ -61,7 +104,7 @@ class SettingsViewModel(
                 val backupData = json.decodeFromString<BackupData>(jsonString)
                 localPersonRepository.restoreBackup(backupData)
                 _toastMessage.emit("اطلاعات با موفقیت بازیابی شد! لطفاً برنامه را مجدد اجرا کنید.")
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _toastMessage.emit("خطا در بازیابی اطلاعات: فایل نامعتبر است.")
             }
         }

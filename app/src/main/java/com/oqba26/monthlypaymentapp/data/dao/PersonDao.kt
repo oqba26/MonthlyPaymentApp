@@ -13,6 +13,9 @@ interface PersonDao {
     @Query("SELECT * FROM persons ORDER BY displayOrder ASC")
     fun getAllPersonsFlow(): Flow<List<Person>>
 
+    @Query("SELECT * FROM persons ORDER BY displayOrder ASC")
+    suspend fun getAllPersons(): List<Person>
+
     @Query("SELECT * FROM persons WHERE id = :id LIMIT 1")
     fun getPersonByIdFlow(id: String): Flow<Person?>
 

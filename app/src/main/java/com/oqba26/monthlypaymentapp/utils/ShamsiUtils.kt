@@ -9,6 +9,7 @@ import java.util.Locale
 
 fun getCurrentShamsiYear(): Int = PersianDate().shYear
 fun getCurrentShamsiMonth(): Int = PersianDate().shMonth
+fun getCurrentShamsiDay(): Int = PersianDate().shDay
 
 fun formatTimestampToPersianDate(timestamp: Long): String {
     val persianDate = PersianDate(Date(timestamp))

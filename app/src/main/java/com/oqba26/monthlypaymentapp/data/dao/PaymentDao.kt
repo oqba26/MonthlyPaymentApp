@@ -13,6 +13,9 @@ interface PaymentDao {
     @Query("SELECT * FROM payments ORDER BY timestamp DESC")
     fun getAllPaymentsFlow(): Flow<List<PaymentRecord>>
 
+    @Query("SELECT * FROM payments ORDER BY timestamp DESC")
+    suspend fun getAllPayments(): List<PaymentRecord>
+
     @Query("SELECT * FROM payments WHERE personId = :personId ORDER BY timestamp DESC")
     fun getPaymentsForPersonFlow(personId: String): Flow<List<PaymentRecord>>
 

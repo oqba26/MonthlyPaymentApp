@@ -1,3 +1,5 @@
+@file:Suppress("unused")
+
 package com.oqba26.monthlypaymentapp.data.remote
 
 import com.oqba26.monthlypaymentapp.data.model.AuthRequest

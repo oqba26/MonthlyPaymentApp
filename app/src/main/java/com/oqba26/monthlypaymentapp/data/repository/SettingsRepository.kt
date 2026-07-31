@@ -21,9 +21,35 @@ class SettingsRepository(context: Context) {
         val SELECTED_FONT_NAME = stringPreferencesKey("selected_font_name")
         val AUTH_TOKEN_KEY = stringPreferencesKey("auth_token")
         val USER_ID_KEY = stringPreferencesKey("user_id")
+        val REMINDER_DAY = stringPreferencesKey("reminder_day")
+        val CARD_NUMBERS = stringPreferencesKey("card_numbers")
+        val IGNORED_CONTACT_SUGGESTIONS = stringPreferencesKey("ignored_contact_suggestions")
 
         const val FALLBACK_AMOUNT = 200000.0
         const val DEFAULT_FONT = "Estedad"
+    }
+
+    val reminderDayFlow: Flow<Int?> = dataStore.data.map {
+        it[REMINDER_DAY]?.toIntOrNull()
+    }
+
+    val cardNumbersFlow: Flow<List<String>> = dataStore.data.map {
+        val raw = it[CARD_NUMBERS] ?: ""
+        if (raw.isBlank()) emptyList() else raw.split("|")
+    }
+
+    suspend fun saveCardNumbers(cards: List<String>) {
+        dataStore.edit { it[CARD_NUMBERS] = cards.joinToString("|") }
+    }
+
+    suspend fun saveReminderDay(day: Int?) {
+        dataStore.edit { preferences ->
+            if (day != null) {
+                preferences[REMINDER_DAY] = day.toString()
+            } else {
+                preferences.remove(REMINDER_DAY)
+            }
+        }
     }
 
     val defaultPaymentAmountFlow: Flow<Double> = dataStore.data.map {
@@ -63,6 +89,20 @@ class SettingsRepository(context: Context) {
             } else {
                 preferences.remove(USER_ID_KEY)
             }
+        }
+    }
+
+    val ignoredContactSuggestionsFlow: Flow<Set<String>> = dataStore.data.map {
+        val raw = it[IGNORED_CONTACT_SUGGESTIONS] ?: ""
+        if (raw.isBlank()) emptySet() else raw.split(",").toSet()
+    }
+
+    suspend fun ignoreContactSuggestion(personId: String) {
+        dataStore.edit { preferences ->
+            val current = preferences[IGNORED_CONTACT_SUGGESTIONS] ?: ""
+            val set = if (current.isBlank()) mutableSetOf() else current.split(",").toMutableSet()
+            set.add(personId)
+            preferences[IGNORED_CONTACT_SUGGESTIONS] = set.joinToString(",")
         }
     }
 }

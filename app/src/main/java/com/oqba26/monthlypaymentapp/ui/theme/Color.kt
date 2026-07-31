@@ -1,3 +1,5 @@
+@file:Suppress("unused")
+
 package com.oqba26.monthlypaymentapp.ui.theme
 
 import androidx.compose.ui.graphics.Color

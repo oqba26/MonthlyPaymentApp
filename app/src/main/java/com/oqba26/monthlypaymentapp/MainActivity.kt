@@ -1,32 +1,47 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
-
 package com.oqba26.monthlypaymentapp
-
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.Crossfade
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Paid
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -41,17 +56,25 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -61,7 +84,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.oqba26.monthlypaymentapp.core.PaymentApplication
+import com.oqba26.monthlypaymentapp.ui.components.PermissionsDialog
+import com.oqba26.monthlypaymentapp.ui.components.UpdateDialog
 import com.oqba26.monthlypaymentapp.ui.screens.ArchiveScreen
 import com.oqba26.monthlypaymentapp.ui.screens.AuthScreen
 import com.oqba26.monthlypaymentapp.ui.screens.PaidListScreen
@@ -69,17 +93,25 @@ import com.oqba26.monthlypaymentapp.ui.screens.PersonDetailScreen
 import com.oqba26.monthlypaymentapp.ui.screens.PersonScreen
 import com.oqba26.monthlypaymentapp.ui.screens.SettingsScreen
 import com.oqba26.monthlypaymentapp.ui.theme.MonthlyPaymentManagement2Theme
+import com.oqba26.monthlypaymentapp.utils.UpdateInfo
+import com.oqba26.monthlypaymentapp.utils.UpdateManager
+import com.oqba26.monthlypaymentapp.viewmodel.ContactViewModel
+import com.oqba26.monthlypaymentapp.viewmodel.AuthViewModel
 import com.oqba26.monthlypaymentapp.viewmodel.AuthState
+import com.oqba26.monthlypaymentapp.viewmodel.PersonListType
+import com.oqba26.monthlypaymentapp.viewmodel.PersonScreenEvent
 import com.oqba26.monthlypaymentapp.viewmodel.PersonViewModel
+import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val application = application as PaymentApplication
-            val personViewModel: PersonViewModel =
-                viewModel(factory = application.personViewModelFactory)
+            val personViewModel: PersonViewModel = hiltViewModel()
 
             MonthlyPaymentManagement2Theme {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -97,27 +129,135 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainAppHost(viewModel: PersonViewModel) {
-    val authState by viewModel.authState.collectAsState()
+    val authViewModel: AuthViewModel = hiltViewModel()
+    val contactViewModel: ContactViewModel = hiltViewModel()
+    val authState by authViewModel.authState.collectAsState()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
-        viewModel.toastMessage.collect { message ->
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    // Update and Permission States
+    val updateManager = remember { UpdateManager(context) }
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var downloadProgress by remember { mutableFloatStateOf(0f) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var showPermissionsDialog by remember { mutableStateOf(false) }
+
+    val requiredPermissions = mutableListOf(
+        Manifest.permission.READ_CONTACTS
+    ).apply {
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
+            add(Manifest.permission.READ_EXTERNAL_STORAGE)
+            add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+    }.toTypedArray()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { permissions ->
+        val allGranted = permissions.entries.all { it.value }
+        if (allGranted) {
+            showPermissionsDialog = false
         }
     }
 
-    Crossfade(targetState = authState, label = "AuthScreenSwitch") { state ->
-        when (state) {
-            is AuthState.Loading -> LoadingScreen()
-            is AuthState.Unauthenticated -> AuthScreen()
-            is AuthState.Authenticated -> AuthenticatedContent(viewModel)
+    LaunchedEffect(Unit) {
+        delay(2000.milliseconds)
+        updateInfo = updateManager.checkForUpdate()
+        
+        val allGranted = requiredPermissions.all {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
         }
+        if (!allGranted) {
+            showPermissionsDialog = true
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        launch {
+            viewModel.toastMessage.collect { message ->
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            }
+        }
+        launch {
+            viewModel.infoMessage.collect { message ->
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // UI elements for update and permissions
+    if (showPermissionsDialog) {
+        PermissionsDialog(
+            onRequestPermissions = { permissionLauncher.launch(requiredPermissions) },
+            onExitClick = { (context as? ComponentActivity)?.finish() }
+        )
+    }
+
+    updateInfo?.let { info ->
+        UpdateDialog(
+            updateInfo = info,
+            onDismiss = { updateInfo = null },
+            onConfirm = {
+                val id = updateManager.downloadAndInstall(info.url, "MonthlyPaymentApp_v${info.versionName}.apk")
+                if (id != -1L) {
+                    isDownloading = true
+                    scope.launch {
+                        updateManager.getDownloadProgress(id).collect { progress ->
+                            downloadProgress = progress
+                            if (progress >= 1f) isDownloading = false
+                        }
+                    }
+                    updateInfo = null
+                }
+            }
+        )
+    }
+
+    if (isDownloading) {
+        Dialog(onDismissRequest = { }) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    tonalElevation = 6.dp,
+                    modifier = Modifier.fillMaxWidth().padding(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "در حال دریافت به‌روزرسانی",
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+                        LinearProgressIndicator(
+                            progress = { downloadProgress },
+                            modifier = Modifier.fillMaxWidth().height(8.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "${(downloadProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // استفاده از when ساده به جای Crossfade برای جلوگیری از پرش‌های لحظه‌ای
+    when (authState) {
+        is AuthState.Loading -> LoadingScreen()
+        is AuthState.Unauthenticated -> AuthScreen()
+        is AuthState.Authenticated -> AuthenticatedContent(viewModel, contactViewModel)
     }
 }
 
 
 @Composable
-fun AuthenticatedContent(viewModel: PersonViewModel) {
+fun AuthenticatedContent(viewModel: PersonViewModel, contactViewModel: ContactViewModel) {
     val navController = rememberNavController()
     var showExitDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -141,31 +281,138 @@ fun AuthenticatedContent(viewModel: PersonViewModel) {
         ExitDialog(
             onConfirmExit = { (context as? ComponentActivity)?.finish() },
             onDismiss = {
-                @Suppress("AssignedValueIsNeverRead")
                 showExitDialog = false
             }
         )
     }
 
+    val isSelectionMode by viewModel.isSelectionMode.collectAsState()
+    var showConfirmMoveDialog by remember { mutableStateOf(false) }
+
+    if (showConfirmMoveDialog) {
+        Dialog(
+            onDismissRequest = { showConfirmMoveDialog = false }
+        ) {
+            CompositionLocalProvider(
+                LocalLayoutDirection provides LayoutDirection.Rtl
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "تایید نهایی جابجایی",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = "آیا از ثبت تغییرات در ترتیب افراد مطمئن هستید؟",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = {
+                                    val listType = when (navController.currentBackStackEntry?.destination?.route) {
+                                        Screen.Paid.route -> PersonListType.PAID
+                                        else -> PersonListType.UNPAID
+                                    }
+                                    viewModel.onEvent(PersonScreenEvent.CommitReorder(listType))
+                                    viewModel.onEvent(PersonScreenEvent.ClearSelection)
+                                    showConfirmMoveDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Text("بله، ذخیره کن")
+                            }
+
+                            Button(
+                                onClick = { showConfirmMoveDialog = false },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondary
+                                )
+                            ) {
+                                Text("لغو")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("مدیریت حقوق ماهانه") },
+                title = {
+                    val titleText = when {
+                        isSelectionMode -> "انتخاب شده‌ها"
+                        currentRoute == Screen.Settings.route -> "تنظیمات"
+                        else -> "مدیریت حقوق ماهانه"
+                    }
+                    Text(titleText)
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = Color.White,
-                    actionIconContentColor = Color.White
+                    containerColor = if (isSelectionMode) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primary,
+                    titleContentColor = if (isSelectionMode) MaterialTheme.colorScheme.onSecondaryContainer else Color.White,
+                    actionIconContentColor = if (isSelectionMode) MaterialTheme.colorScheme.onSecondaryContainer else Color.White
                 ),
+                navigationIcon = {
+                    if (isSelectionMode) {
+                        IconButton(onClick = { viewModel.onEvent(PersonScreenEvent.ClearSelection) }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear selection")
+                        }
+                    }
+                },
                 actions = {
-                    if (currentRoute == Screen.Unpaid.route) {
-                        Button(
+                    if (isSelectionMode) {
+                        val listType = when (currentRoute) {
+                            Screen.Paid.route -> PersonListType.PAID
+                            else -> PersonListType.UNPAID
+                        }
+                        IconButton(onClick = { viewModel.onEvent(PersonScreenEvent.MoveSelected(-1, listType)) }) {
+                            Icon(Icons.Default.ArrowUpward, contentDescription = "Move Up")
+                        }
+                        IconButton(onClick = { viewModel.onEvent(PersonScreenEvent.MoveSelected(1, listType)) }) {
+                            Icon(Icons.Default.ArrowDownward, contentDescription = "Move Down")
+                        }
+                        IconButton(onClick = { showConfirmMoveDialog = true }) {
+                            Icon(Icons.Default.Check, contentDescription = "Confirm Move", tint = Color.Green)
+                        }
+                    } else if (currentRoute == Screen.Unpaid.route) {
+                        FilledIconButton(
                             onClick = { viewModel.onAddPersonClicked() },
-                            modifier = Modifier.padding(horizontal = 8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondary
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = Color.White
                             )
                         ) {
-                            Text("افزودن شخص")
+                            Icon(Icons.Default.Add, contentDescription = "افزودن شخص")
+                        }
+                        FilledIconButton(
+                            onClick = { contactViewModel.onBulkSmsClicked() },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = Color.White
+                            ),
+                            modifier = Modifier.padding(start = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Message,
+                                contentDescription = "Bulk SMS",
+                                modifier = Modifier.graphicsLayer(scaleX = -1f)
+                            )
                         }
                     }
                 }
@@ -175,7 +422,8 @@ fun AuthenticatedContent(viewModel: PersonViewModel) {
             if (showBottomBar) {
                 AppBottomNavigationBar(navController = navController)
             }
-        }
+        },
+        /* Floating Action Button removed and moved to TopAppBar actions */
     ) { innerPadding ->
         NavHost(
             navController = navController,
@@ -185,17 +433,23 @@ fun AuthenticatedContent(viewModel: PersonViewModel) {
             composable(Screen.Unpaid.route) {
                 PersonScreen(
                     viewModel = viewModel,
+                    contactViewModel = contactViewModel,
                     navController = navController
                 )
             }
             composable(Screen.Paid.route) {
-                PaidListScreen(viewModel, navController)
+                PaidListScreen(
+                    viewModel = viewModel,
+                    contactViewModel = contactViewModel,
+                    navController = navController
+                )
             }
             composable(Screen.Archive.route) {
                 ArchiveScreen(viewModel)
             }
             composable(Screen.Settings.route) {
-                SettingsScreen(onLogout = { viewModel.logout() })
+                val authViewModel: AuthViewModel = hiltViewModel()
+                SettingsScreen(onLogout = { authViewModel.logout() })
             }
             composable(
                 route = "person_detail/{personId}",
@@ -206,6 +460,7 @@ fun AuthenticatedContent(viewModel: PersonViewModel) {
                     PersonDetailScreen(
                         personId = personId,
                         viewModel = viewModel,
+                        contactViewModel = contactViewModel,
                         navController = navController
                     )
                 }
@@ -268,32 +523,52 @@ sealed class Screen(
 
 @Composable
 fun ExitDialog(onConfirmExit: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("خروج از برنامه") },
-        text = { Text("آیا برای خروج از برنامه مطمئن هستید؟") },
-        confirmButton = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(all = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
+    Dialog(
+        onDismissRequest = onDismiss
+    ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides LayoutDirection.Rtl
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp)
             ) {
-                Button(
-                    onClick = onConfirmExit,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text("بله")
-                }
-                Button(onClick = onDismiss) {
-                    Text("خیر")
+                    Text(
+                        text = stringResource(R.string.exit_app),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = stringResource(R.string.exit_app_confirm),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = onConfirmExit,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text(stringResource(R.string.yes))
+                        }
+                        Button(onClick = onDismiss) {
+                            Text(stringResource(R.string.no))
+                        }
+                    }
                 }
             }
-        },
-        dismissButton = {}
-    )
+        }
+    }
 }
 
 @Composable

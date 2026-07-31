@@ -1,5 +1,3 @@
-@file:Suppress("AssignedValueIsNeverRead")
-
 package com.oqba26.monthlypaymentapp.ui.screens
 
 import android.widget.Toast
@@ -11,16 +9,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -33,10 +33,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,15 +47,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.oqba26.monthlypaymentapp.core.PaymentApplication
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.oqba26.monthlypaymentapp.utils.PersianDigitsTransformation
 import com.oqba26.monthlypaymentapp.utils.PersianNumberVisualTransformation
 import com.oqba26.monthlypaymentapp.utils.formatNumberAsPersian
+import com.oqba26.monthlypaymentapp.utils.toPersianDigits
 import com.oqba26.monthlypaymentapp.viewmodel.SettingsViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.stringResource
+import com.oqba26.monthlypaymentapp.R
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
@@ -66,8 +73,7 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(onLogout: () -> Unit) {
     val context = LocalContext.current
-    val app = context.applicationContext as PaymentApplication
-    val viewModel: SettingsViewModel = viewModel(factory = app.settingsViewModelFactory)
+    val viewModel: SettingsViewModel = hiltViewModel()
     val coroutineScope = rememberCoroutineScope()
 
     val defaultAmount by viewModel.defaultPaymentAmount.collectAsState()
@@ -93,17 +99,9 @@ fun SettingsScreen(onLogout: () -> Unit) {
                                 writer.write(jsonString)
                             }
                         }
-                        Toast.makeText(
-                            context,
-                            "پشتیبان‌گیری با موفقیت انجام شد",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        Toast.makeText(context, "پشتیبان‌گیری با موفقیت انجام شد", Toast.LENGTH_LONG).show()
                     } catch (_: Exception) {
-                        Toast.makeText(
-                            context,
-                            "خطا در ایجاد فایل پشتیبان",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        Toast.makeText(context, "خطا در ایجاد فایل پشتیبان", Toast.LENGTH_LONG).show()
                     }
                 }
             }
@@ -127,186 +125,169 @@ fun SettingsScreen(onLogout: () -> Unit) {
         }
     )
 
-    Scaffold { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            Text(
-                "تنظیمات عمومی",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .fillMaxWidth()
+            .fillMaxHeight()
+    ) {
+        Text(
+            stringResource(R.string.settings),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
 
-            DefaultAmountSetting(
-                defaultAmount = defaultAmount,
-                onSave = { viewModel.saveDefaultPaymentAmount(it) }
-            )
+        DefaultAmountSetting(
+            defaultAmount = defaultAmount,
+            onSave = { viewModel.saveDefaultPaymentAmount(it) }
+        )
 
-            Spacer(modifier = Modifier.height(18.dp))
+        Spacer(Modifier.weight(1f))
 
-            FontSelectionDropdown(
-                selectedFont = selectedFont,
-                onFontSelected = { viewModel.onFontSelected(it) }
-            )
+        val reminderDay by viewModel.reminderDay.collectAsState()
+        ReminderDaySetting(
+            currentDay = reminderDay,
+            onSave = { viewModel.saveReminderDay(it) }
+        )
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 20.dp))
+        Spacer(Modifier.weight(1f))
 
-            Text(
-                "پشتیبان‌گیری و بازیابی",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
+        val cardNumbers by viewModel.cardNumbers.collectAsState()
+        CardNumbersSetting(
+            cardNumbers = cardNumbers,
+            onAdd = { viewModel.addCardNumber(it) },
+            onRemove = { viewModel.removeCardNumber(it) }
+        )
 
+        Spacer(Modifier.weight(1f))
+
+        FontSelectionDropdown(
+            selectedFont = selectedFont,
+            onFontSelected = { viewModel.onFontSelected(it) }
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+        Text(
+            "پشتیبان‌گیری و بازیابی",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
                 onClick = {
-                    val simpleDateFormat =
-                        SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault())
+                    val simpleDateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault())
                     val fileName = "payment_backup_${simpleDateFormat.format(Date())}.json"
                     backupLauncher.launch(fileName)
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.weight(1f)
             ) {
-                Text("تهیه نسخه پشتیبان")
+                Text("تهیه پشتیبان", fontSize = 13.sp)
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             OutlinedButton(
                 onClick = { restoreLauncher.launch(arrayOf("application/json")) },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                )
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
             ) {
-                Text("بازیابی اطلاعات از فایل")
+                Text("بازیابی فایل", fontSize = 13.sp)
             }
+        }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 20.dp))
+        Spacer(Modifier.weight(1f))
 
-            Button(
-                onClick = onLogout,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.error
-                )
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Logout,
-                    contentDescription = "خروج"
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("خروج از حساب کاربری")
-            }
+        Button(
+            onClick = onLogout,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)
+        ) {
+            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.logout))
         }
     }
 
     backupJsonToRestore?.let { json ->
-        AlertDialog(
-            onDismissRequest = { backupJsonToRestore = null },
-            title = { Text("هشدار جدی!") },
-            text = {
-                Text(
-                    "آیا مطمئن هستید؟ با بازیابی اطلاعات، تمام داده‌های فعلی برنامه (اشخاص و پرداخت‌ها) برای همیشه حذف شده و اطلاعات فایل پشتیبان جایگزین آن خواهد شد. این عمل غیرقابل بازگشت است."
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.restoreFromBackupJson(json)
-                        backupJsonToRestore = null
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
+        Dialog(onDismissRequest = { backupJsonToRestore = null }) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    shape = RoundedCornerShape(24.dp)
                 ) {
-                    Text("بله، بازیابی کن")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { backupJsonToRestore = null }) {
-                    Text("لغو")
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.restore_warning),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = stringResource(R.string.restore_warning_text),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = {
+                                    viewModel.restoreFromBackupJson(json)
+                                    backupJsonToRestore = null
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                            ) { Text(stringResource(R.string.yes)) }
+
+                            Button(onClick = { backupJsonToRestore = null }) { Text(stringResource(R.string.cancel)) }
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 }
 
 @Composable
-fun DefaultAmountSetting(
-    defaultAmount: Double,
-    onSave: (String) -> Unit
-) {
+fun DefaultAmountSetting(defaultAmount: Double, onSave: (String) -> Unit) {
     var isEditing by remember { mutableStateOf(false) }
-    var amountText by remember(defaultAmount, isEditing) {
-        mutableStateOf(defaultAmount.toLong().toString())
-    }
+    var amountText by remember(defaultAmount, isEditing) { mutableStateOf(defaultAmount.toLong().toString()) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(0.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
     ) {
-        AnimatedContent(
-            targetState = isEditing,
-            label = "EditAmountAnimation",
-            modifier = Modifier.padding(12.dp)
-        ) { editing ->
+        AnimatedContent(targetState = isEditing, label = "EditAmount") { editing ->
             if (editing) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     OutlinedTextField(
                         value = amountText,
-                        onValueChange = {
-                            amountText = it.filter { c -> c.isDigit() }
-                        },
+                        onValueChange = { amountText = it.filter { c -> c.isDigit() } },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("مبلغ پیش فرض پرداخت (تومان)") },
+                        label = { Text("مبلغ پیش‌فرض (تومان)") },
                         visualTransformation = PersianNumberVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number
-                        )
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
-                    Spacer(Modifier.height(12.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.End,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        TextButton(onClick = { isEditing = false }) {
-                            Text("لغو")
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(onClick = {
-                            onSave(amountText)
-                            isEditing = false
-                        }) {
-                            Text("ذخیره")
-                        }
+                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { isEditing = false }) { Text("لغو") }
+                        Button(onClick = { onSave(amountText); isEditing = false }) { Text("ذخیره") }
                     }
                 }
             } else {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Column {
-                        Text(
-                            "مبلغ پیش فرض پرداخت",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Text(
-                            "${formatNumberAsPersian(defaultAmount)} تومان",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("مبلغ پیش فرض پرداخت", style = MaterialTheme.typography.bodyLarge)
+                        Text("${formatNumberAsPersian(defaultAmount)} تومان", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
                     }
-                    IconButton(onClick = { isEditing = true }) {
-                        Icon(Icons.Filled.Edit, contentDescription = "Edit Amount")
-                    }
+                    IconButton(onClick = { isEditing = true }) { Icon(Icons.Filled.Edit, null) }
                 }
             }
         }
@@ -314,34 +295,97 @@ fun DefaultAmountSetting(
 }
 
 @Composable
-fun FontSelectionDropdown(
-    selectedFont: String,
-    onFontSelected: (String) -> Unit
-) {
+fun ReminderDaySetting(currentDay: Int?, onSave: (String) -> Unit) {
+    var isEditing by remember { mutableStateOf(false) }
+    var dayText by remember(currentDay, isEditing) { mutableStateOf(currentDay?.toString() ?: "") }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+    ) {
+        AnimatedContent(targetState = isEditing, label = "EditReminder") { editing ->
+            if (editing) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    OutlinedTextField(
+                        value = dayText,
+                        onValueChange = { dayText = it.filter { c -> c.isDigit() }.take(2) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("روز یادآور (۱ تا ۳۱)") },
+                        visualTransformation = PersianDigitsTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { isEditing = false }) { Text("لغو") }
+                        Button(onClick = { onSave(dayText); isEditing = false }) { Text("ذخیره") }
+                    }
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("روز یادآور ماهانه", style = MaterialTheme.typography.bodyLarge)
+                        Text(if (currentDay != null) "روز ${currentDay.toString().toPersianDigits()} هر ماه" else "غیرفعال", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+                    }
+                    IconButton(onClick = { isEditing = true }) { Icon(Icons.Filled.Edit, null) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CardNumbersSetting(cardNumbers: List<String>, onAdd: (String) -> Unit, onRemove: (String) -> Unit) {
+    var isAdding by remember { mutableStateOf(false) }
+    var newCardText by remember { mutableStateOf("") }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("شماره کارت‌های بانکی", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                IconButton(onClick = { isAdding = true }) { Icon(Icons.Default.Add, null) }
+            }
+            if (isAdding) {
+                OutlinedTextField(
+                    value = newCardText,
+                    onValueChange = { newCardText = it.filter { c -> c.isDigit() } },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("شماره ۱۶ رقمی") },
+                    visualTransformation = PersianDigitsTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = { isAdding = false; newCardText = "" }) { Text("لغو") }
+                    Button(onClick = { if (newCardText.length >= 16) { onAdd(newCardText); isAdding = false; newCardText = "" } }) { Text("افزودن") }
+                }
+            }
+            cardNumbers.forEach { card ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(card.toPersianDigits(), modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                    IconButton(onClick = { onRemove(card) }) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FontSelectionDropdown(selectedFont: String, onFontSelected: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val fonts = listOf("Estedad", "Vazirmatn", "BYekan", "Sahel", "IranianSans")
 
     Box(modifier = Modifier.fillMaxWidth()) {
-        OutlinedButton(
-            onClick = { expanded = true },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("فونت برنامه: $selectedFont")
-            Icon(Icons.Filled.ArrowDropDown, contentDescription = "Select Font")
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("فونت برنامه: $selectedFont", fontSize = 14.sp)
+            Icon(Icons.Filled.ArrowDropDown, null)
         }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             fonts.forEach { fontName ->
-                DropdownMenuItem(
-                    text = { Text(fontName) },
-                    onClick = {
-                        onFontSelected(fontName)
-                        expanded = false
-                    }
-                )
+                DropdownMenuItem(text = { Text(fontName) }, onClick = { onFontSelected(fontName); expanded = false })
             }
         }
     }

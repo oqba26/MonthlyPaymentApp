@@ -14,7 +14,7 @@ class PersianNumberVisualTransformation : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val originalText = text.text
         if (originalText.isBlank()) {
-            return TransformedText(text, OffsetMapping.Identity)
+            return TransformedText(AnnotatedString(""), OffsetMapping.Identity)
         }
 
         val number = originalText.toLongOrNull() ?: 0L
@@ -22,27 +22,44 @@ class PersianNumberVisualTransformation : VisualTransformation {
 
         val offsetMapping = object : OffsetMapping {
             override fun originalToTransformed(offset: Int): Int {
-                try {
-                    val thousandsSeparators = formattedText.count { it == '٬' }
-                    return (offset + thousandsSeparators).coerceIn(0, formattedText.length)
-                } catch (e: Exception) {
-                    return formattedText.length
+                if (offset == 0) return 0
+                var transformedOffset = 0
+                var originalOffset = 0
+                for (char in formattedText) {
+                    if (char != '٬') {
+                        originalOffset++
+                    }
+                    transformedOffset++
+                    if (originalOffset == offset) break
                 }
+                return transformedOffset
             }
 
             override fun transformedToOriginal(offset: Int): Int {
-                try {
-                    val separatorsBeforeCursor = formattedText.substring(0, offset).count { it == '٬' }
-                    return (offset - separatorsBeforeCursor).coerceIn(0, originalText.length)
-                } catch (e: Exception) {
-                    return originalText.length
+                if (offset == 0) return 0
+                var originalOffset = 0
+                for (i in 0 until offset.coerceAtMost(formattedText.length)) {
+                    if (formattedText[i] != '٬') {
+                        originalOffset++
+                    }
                 }
+                return originalOffset
             }
         }
 
         return TransformedText(
             text = AnnotatedString(formattedText),
             offsetMapping = offsetMapping
+        )
+    }
+}
+
+class PersianDigitsTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val transformed = text.text.toPersianDigits()
+        return TransformedText(
+            text = AnnotatedString(transformed),
+            offsetMapping = OffsetMapping.Identity
         )
     }
 }

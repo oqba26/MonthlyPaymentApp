@@ -8,11 +8,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -20,14 +21,21 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.oqba26.monthlypaymentapp.viewmodel.ContactViewModel
 import com.oqba26.monthlypaymentapp.viewmodel.PersonListType
 import com.oqba26.monthlypaymentapp.viewmodel.PersonScreenEvent
 import com.oqba26.monthlypaymentapp.viewmodel.PersonUiModel
@@ -38,47 +46,37 @@ import org.burnoutcrew.reorderable.rememberReorderableLazyListState
 import org.burnoutcrew.reorderable.reorderable
 
 @Composable
-fun PaidListScreen(viewModel: PersonViewModel, navController: NavController) {
+fun PaidListScreen(
+    viewModel: PersonViewModel,
+    contactViewModel: ContactViewModel = hiltViewModel(),
+    navController: NavController
+) {
     val uiState by viewModel.uiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
 
-    // شخصی که قرار است در این صفحه با تأیید کاربر به آرشیو منتقل شود
     val personToArchive = remember { mutableStateOf<PersonUiModel?>(null) }
 
     val state = rememberReorderableLazyListState(
         onMove = { from, to ->
             if (searchQuery.isBlank()) {
-                viewModel.onEvent(
-                    PersonScreenEvent.MovePersonNew(
-                        fromIndex = from.index,
-                        toIndex = to.index,
-                        listType = PersonListType.PAID
-                    )
-                )
+                viewModel.onEvent(PersonScreenEvent.MovePersonNew(from.index, to.index, PersonListType.PAID))
             }
         },
         onDragEnd = { _, _ ->
             if (searchQuery.isBlank()) {
-                viewModel.onEvent(
-                    PersonScreenEvent.CommitReorder(
-                        listType = PersonListType.PAID
-                    )
-                )
+                viewModel.onEvent(PersonScreenEvent.CommitReorder(PersonListType.PAID))
             }
         }
     )
 
     Scaffold { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding)) {
-
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { viewModel.onSearchQueryChange(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 label = { Text("جستجوی نام...") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = "Search") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                 singleLine = true
             )
 
@@ -86,84 +84,47 @@ fun PaidListScreen(viewModel: PersonViewModel, navController: NavController) {
                 state = state.listState,
                 modifier = Modifier.reorderable(state)
             ) {
-                itemsIndexed(
-                    uiState.paidPersons,
-                    key = { _, person -> person.id }
-                ) { index, person ->
+                itemsIndexed(uiState.paidPersons, key = { _, person -> person.id }) { index, person ->
                     ReorderableItem(state, key = person.id) { _ ->
-
-                        val rowDragModifier =
-                            if (searchQuery.isBlank()) {
-                                Modifier.detectReorderAfterLongPress(state)
-                            } else {
-                                Modifier
-                            }
-
-                        Row(
-                            modifier = rowDragModifier
-                                .fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                        val rowDragModifier = if (searchQuery.isBlank()) Modifier.detectReorderAfterLongPress(state) else Modifier
+                        Row(modifier = rowDragModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Box(modifier = Modifier.weight(1f)) {
                                 PersonListItem(
                                     person = person,
                                     index = index + 1,
-                                    onPersonClick = {
-                                        navController.navigate("person_detail/${person.id}")
-                                    },
-                                    // در لیست پرداخت شده‌ها، دکمه پرداخت سریع کاری نمی‌کند
+                                    onPersonClick = { navController.navigate("person_detail/${person.id}") },
                                     onQuickPayClick = { },
-                                    onArchiveClick = { selectedPerson ->
-                                        personToArchive.value = selectedPerson
-                                    }
+                                    onArchiveClick = { personToArchive.value = it },
+                                    onSmsClick = { contactViewModel.sendSmsReminder(it) }
                                 )
                             }
                         }
-
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                     }
                 }
             }
         }
 
-        // دیالوگ تأیید انتقال به آرشیو برای لیست پرداخت‌شده‌ها
         personToArchive.value?.let { person ->
-            AlertDialog(
-                onDismissRequest = { personToArchive.value = null },
-                title = { Text("انتقال به آرشیو") },
-                text = { Text("آیا از انتقال ${person.name} به آرشیو مطمئن هستید؟") },
-                confirmButton = {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        // در RTL: این دکمه کاملاً به سمت راست دیالوگ می‌چسبد
-                        Button(onClick = { personToArchive.value = null }) {
-                            Text("لغو")
-                        }
-
-                        // در RTL: این دکمه کاملاً به سمت چپ دیالوگ می‌چسبد
-                        Button(
-                            onClick = {
-                                viewModel.onEvent(
-                                    PersonScreenEvent.ArchivePerson(person.id)
-                                )
-                                personToArchive.value = null
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondary
-                            )
-                        ) {
-                            Text("آرشیو")
+            Dialog(onDismissRequest = { personToArchive.value = null }) {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    Card(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(24.dp)) {
+                        Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Text(text = "انتقال به آرشیو", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                            Text(text = "آیا از انتقال ${person.name} به آرشیو مطمئن هستید؟", style = MaterialTheme.typography.bodyMedium)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Button(onClick = { personToArchive.value = null }) { Text("لغو") }
+                                Button(onClick = {
+                                    viewModel.onEvent(PersonScreenEvent.ArchivePerson(person.id))
+                                    personToArchive.value = null
+                                }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
+                                    Text("آرشیو")
+                                }
+                            }
                         }
                     }
-                },
-                dismissButton = {}
-            )
+                }
+            }
         }
     }
 }

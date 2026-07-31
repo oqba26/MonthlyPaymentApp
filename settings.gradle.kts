@@ -1,34 +1,30 @@
+// Forcefully clear conflicting Android environment variables
+System.clearProperty("ANDROID_PREFS_ROOT")
+System.clearProperty("ANDROID_USER_HOME")
+
 pluginManagement {
     repositories {
-        // رسمی‌ها (بهتره اول باشند برای اطمینان و امنیت)
-        gradlePluginPortal()
         google()
         mavenCentral()
-        // آینهٔ مِیون‌سنترال (گوگل)
-        maven("https://maven-central.storage-download.googleapis.com/maven2/")
-
-        // آینه‌های Aliyun (برای مواقع تحریم/اختلال)
-        maven("https://maven.aliyun.com/repository/gradle-plugin")
-        maven("https://maven.aliyun.com/repository/google")
-        maven("https://maven.aliyun.com/repository/public")
+        gradlePluginPortal()
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
+        maven { url = uri("https://maven.aliyun.com/repository/public") }
+        maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
+        maven { url = uri("https://maven.myket.ir/") }
     }
 }
-
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
+}
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        // رسمی‌ها
         google()
         mavenCentral()
-        // آینهٔ مِیون‌سنترال (گوگل)
-        maven("https://maven-central.storage-download.googleapis.com/maven2/")
-
-        // JitPack برای PersianDate
-        maven("https://jitpack.io")
-
-        // آینه‌های Aliyun
-        maven("https://maven.aliyun.com/repository/google")
-        maven("https://maven.aliyun.com/repository/public")
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
+        maven { url = uri("https://maven.aliyun.com/repository/public") }
+        maven { url = uri("https://jitpack.io") }
+        maven { url = uri("https://maven.myket.ir/") }
     }
 }
 

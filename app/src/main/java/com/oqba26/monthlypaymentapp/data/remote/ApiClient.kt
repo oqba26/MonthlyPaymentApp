@@ -1,44 +1,38 @@
+@file:OptIn(io.github.jan.supabase.annotations.SupabaseInternal::class)
+
 package com.oqba26.monthlypaymentapp.data.remote
 
-import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.oqba26.monthlypaymentapp.BuildConfig
-import com.oqba26.monthlypaymentapp.data.repository.SettingsRepository
+import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.gotrue.Auth
+import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.serializer.KotlinXSerializer
+import io.ktor.client.plugins.HttpTimeout
 import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
 
-// ⭐️ تغییر به کلاس برای تزریق SettingsRepository
-class ApiClient(settingsRepository: SettingsRepository) {
+object ApiClient {
 
-    // تنظیمات Kotlinx.Serialization
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-    }
+    val client = createSupabaseClient(
+        supabaseUrl = BuildConfig.SUPABASE_URL,
+        supabaseKey = BuildConfig.SUPABASE_KEY
+    ) {
+        defaultSerializer = KotlinXSerializer(Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+            encodeDefaults = true
+        })
 
-    // ⭐️ ایجاد اینترسپتور احراز هویت
-    private val authInterceptor = AuthInterceptor(settingsRepository)
+        httpConfig {
+            install(HttpTimeout) {
+                requestTimeoutMillis = 30000
+                connectTimeoutMillis = 30000
+                socketTimeoutMillis = 30000
+            }
+        }
 
-    private val logging = HttpLoggingInterceptor().apply {
-        level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
-    }
-
-    // ⭐️ افزودن AuthInterceptor به OkHttpClient
-    private val client: OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(authInterceptor)
-        .addInterceptor(logging)
-        .build()
-
-    val api: ApiService by lazy {
-        val contentType = "application/json".toMediaType()
-
-        Retrofit.Builder()
-            .baseUrl("http://167.235.136.65:8080/") // آدرس سرور
-            .client(client)
-            .addConverterFactory(json.asConverterFactory(contentType))
-            .build()
-            .create(ApiService::class.java)
+        install(Postgrest)
+        install(Auth)
+        install(Realtime)
     }
 }

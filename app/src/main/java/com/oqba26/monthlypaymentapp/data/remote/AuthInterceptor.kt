@@ -6,6 +6,7 @@ import kotlinx.coroutines.runBlocking
 import okhttp3.Interceptor
 import okhttp3.Response
 
+@Suppress("unused")
 class AuthInterceptor(
     private val settingsRepository: SettingsRepository
 ) : Interceptor {

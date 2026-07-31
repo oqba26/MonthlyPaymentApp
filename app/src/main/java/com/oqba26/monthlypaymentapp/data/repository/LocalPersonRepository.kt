@@ -1,3 +1,5 @@
+@file:Suppress("unused")
+
 package com.oqba26.monthlypaymentapp.data.repository
 
 import androidx.room.withTransaction
@@ -35,7 +37,7 @@ class LocalPersonRepository(
                 currentByName.containsKey(norm) -> currentByName[norm]!!.id
                 else -> UUID.randomUUID().toString()
             }
-            Person(id = resolvedId, name = name)
+            p.copy(id = resolvedId, name = name)
         }
 
         personDao.insertAll(safePersons)
@@ -60,7 +62,7 @@ class LocalPersonRepository(
                     currentByName.containsKey(norm) -> currentByName[norm]!!.id
                     else -> UUID.randomUUID().toString()
                 }
-                Person(id = resolvedId, name = name)
+                p.copy(id = resolvedId, name = name)
             }
 
             // ۲. حذف کامل تمام داده‌های محلی
@@ -75,8 +77,8 @@ class LocalPersonRepository(
 
     // Backup/Restore
     suspend fun getDataForBackup(): BackupData {
-        val persons = getAllPersonsFlow().first()
-        val payments = getAllPaymentsFlow().first()
+        val persons = personDao.getAllPersons()
+        val payments = paymentDao.getAllPayments()
         return BackupData(persons = persons, payments = payments)
     }
 
@@ -88,7 +90,7 @@ class LocalPersonRepository(
             val safePersons = backupData.persons.map { p ->
                 val name = p.name.trim()
                 val id = p.id.ifBlank { UUID.randomUUID().toString() }
-                Person(id = id, name = name)
+                p.copy(id = id, name = name)
             }
 
             personDao.insertAll(safePersons)

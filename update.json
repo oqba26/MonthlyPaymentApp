@@ -1,7 +1,7 @@
 {
   "versionCode": 1,
   "versionName": "1.0.0",
-  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.0.0/MonthlyPaymentApp-v1.0.0.apk",
+  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.0.0/MonthlyPaymentApp.apk",
   "releaseNotes": "نسخه اولیه برنامه مدیریت حقوق ماهانه:\n- مدیریت لیست افراد\n- تفکیک وضعیت پرداخت\n- سیستم آپدیت خودکار\n- مدیریت دسترسی‌های اجباری",
   "isForceUpdate": false
 }

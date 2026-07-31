@@ -1,3 +1,33 @@
 <resources>
     <string name="app_name">مدیریت حقوق ماهانه</string>
+    <string name="archive_person">آرشیو شخص</string>
+    <string name="archive_person_confirm">آیا از انتقال %1$s به آرشیو مطمئن هستید؟</string>
+    <string name="delete_person">حذف قطعی شخص</string>
+    <string name="delete_person_confirm">آیا از حذف قطعی %1$s و تمامی سوابق پرداخت او مطمئن هستید؟ این عمل غیرقابل بازگشت است.</string>
+    <string name="restore_person">بازیابی شخص</string>
+    <string name="restore_person_confirm">آیا از بازیابی %1$s به لیست اصلی مطمئن هستید؟</string>
+    <string name="exit_app">خروج از برنامه</string>
+    <string name="exit_app_confirm">آیا برای خروج از برنامه مطمئن هستید؟</string>
+    <string name="yes">بله</string>
+    <string name="no">خیر</string>
+    <string name="cancel">لغو</string>
+    <string name="save">ذخیره</string>
+    <string name="add">افزودن</string>
+    <string name="edit">ویرایش</string>
+    <string name="settings">تنظیمات</string>
+    <string name="backup">پشتیبان‌گیری</string>
+    <string name="restore">بازیابی</string>
+    <string name="backup_success">پشتیبان‌گیری با موفقیت انجام شد</string>
+    <string name="backup_error">خطا در ایجاد فایل پشتیبان</string>
+    <string name="restore_warning">هشدار بازیابی</string>
+    <string name="restore_warning_text">با بازیابی، تمام داده‌های فعلی حذف و اطلاعات فایل جایگزین می‌شود. مطمئن هستید؟</string>
+    <string name="logout">خروج از حساب کاربری</string>
+    <string name="default_payment_amount">مبلغ پیش‌فرض پرداخت</string>
+    <string name="reminder_day">روز یادآور ماهانه</string>
+    <string name="bank_cards">شماره کارت‌های بانکی</string>
+    <string name="add_person">افزودن شخص جدید</string>
+    <string name="bulk_sms">ارسال گروهی پیامک</string>
+    <string name="unpaid">پرداخت نشده</string>
+    <string name="paid">پرداخت شده</string>
+    <string name="archived">آرشیو شده</string>
 </resources>

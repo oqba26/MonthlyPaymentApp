@@ -10,8 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -27,28 +27,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.oqba26.monthlypaymentapp.core.PaymentApplication
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.oqba26.monthlypaymentapp.data.model.AuthRequest
 import com.oqba26.monthlypaymentapp.viewmodel.AuthState
-import com.oqba26.monthlypaymentapp.viewmodel.PersonViewModel
+import com.oqba26.monthlypaymentapp.viewmodel.AuthViewModel
 
 @Composable
 fun AuthScreen(
-    viewModel: PersonViewModel = viewModel(
-        // استفاده از Factory که در PaymentApplication تعریف شده است
-        factory = (LocalContext.current.applicationContext as PaymentApplication).personViewModelFactory
-    )
+    viewModel: AuthViewModel = hiltViewModel()
 ) {
-    // مشاهده وضعیت لودینگ از ViewModel
     val authState by viewModel.authState.collectAsState()
     val isLoading = authState is AuthState.Loading
-
-    // مدیریت وضعیت نمایش فرم (ورود یا ثبت نام)
     var isLoginMode by remember { mutableStateOf(true) }
 
     Column(
@@ -67,8 +59,8 @@ fun AuthScreen(
         AuthForm(
             isLoginMode = isLoginMode,
             isLoading = isLoading,
-            onAuthenticate = { username, password ->
-                val request = AuthRequest(username, password)
+            onAuthenticate = { email, password ->
+                val request = AuthRequest(email, password)
                 if (isLoginMode) {
                     viewModel.login(request)
                 } else {
@@ -79,7 +71,6 @@ fun AuthScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // دکمه تغییر وضعیت: رفتن به ثبت نام یا ورود
         TextButton(onClick = { isLoginMode = !isLoginMode }, enabled = !isLoading) {
             Text(
                 text = if (isLoginMode) "حساب کاربری ندارید؟ ثبت نام کنید." else "قبلاً ثبت نام کرده‌اید؟ وارد شوید."
@@ -94,17 +85,17 @@ private fun AuthForm(
     isLoading: Boolean,
     onAuthenticate: (String, String) -> Unit
 ) {
-    var username by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val buttonText = if (isLoginMode) "ورود" else "ثبت نام"
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // فیلد نام کاربری
         OutlinedTextField(
-            value = username,
-            onValueChange = { username = it },
-            label = { Text("نام کاربری") },
-            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+            value = email,
+            onValueChange = { email = it },
+            label = { Text("ایمیل") },
+            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             singleLine = true,
             modifier = Modifier.fillMaxWidth(0.8f),
             enabled = !isLoading
@@ -112,7 +103,6 @@ private fun AuthForm(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // فیلد رمز عبور
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
@@ -127,11 +117,10 @@ private fun AuthForm(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // دکمه ورود/ثبت نام
         Button(
-            onClick = { onAuthenticate(username, password) },
+            onClick = { onAuthenticate(email, password) },
             modifier = Modifier.fillMaxWidth(0.8f).height(50.dp),
-            enabled = username.isNotBlank() && password.isNotBlank() && !isLoading
+            enabled = email.isNotBlank() && password.isNotBlank() && !isLoading
         ) {
             if (isLoading) {
                 CircularProgressIndicator(

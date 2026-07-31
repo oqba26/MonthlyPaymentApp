@@ -1,18 +1,25 @@
+@file:OptIn(kotlinx.serialization.InternalSerializationApi::class)
+
 package com.oqba26.monthlypaymentapp.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import kotlinx.serialization.InternalSerializationApi
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlin.OptIn // CORRECTED IMPORT
 
-@OptIn(InternalSerializationApi::class)
 @Serializable
 @Entity(tableName = "persons")
 data class Person(
-    @PrimaryKey val id: String = "",
-    val name: String,
-    val isArchived: Boolean = false,
-    val displayOrder: Long = 0L, 
-    val createdAt: Long = 0L
+    @PrimaryKey 
+    @SerialName("id") val id: String = "",
+    
+    @SerialName("name") val name: String,
+    
+    @SerialName("isArchived") val isArchived: Boolean = false,
+    
+    @SerialName("displayOrder") val displayOrder: Long? = 0L,
+    
+    @SerialName("createdAt") val createdAt: Long? = 0L,
+
+    @SerialName("phoneNumber") val phoneNumber: String? = ""
 )

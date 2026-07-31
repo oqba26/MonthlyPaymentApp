@@ -4,16 +4,27 @@ package com.oqba26.monthlypaymentapp.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import java.util.UUID
 
-@kotlinx.serialization.Serializable
+@Serializable
 @Entity(tableName = "payments")
 data class PaymentRecord(
-    @PrimaryKey val id: String = UUID.randomUUID().toString(),
-    val personId: String,
-    val amount: Double,
-    val shamsiYear: Int,
-    val shamsiMonth: Int,
-    val timestamp: Long = System.currentTimeMillis(),
-    val description: String = ""
+    @PrimaryKey 
+    @SerialName("id") val id: String = UUID.randomUUID().toString(),
+    
+    @SerialName("personId") val personId: String,
+    
+    @SerialName("amount") val amount: Double,
+    
+    @SerialName("shamsiYear") val shamsiYear: Int,
+    
+    @SerialName("shamsiMonth") val shamsiMonth: Int,
+    
+    @SerialName("timestamp") val timestamp: Long = System.currentTimeMillis(),
+    
+    @SerialName("description") val description: String? = "", // ⭐️ تغییر به String? برای پذیرش مقادیر null
+
+    @SerialName("createdAt") val createdAt: Long? = null
 )

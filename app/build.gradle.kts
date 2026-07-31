@@ -1,16 +1,30 @@
 // app/build.gradle.kts
 
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.jetbrains.kotlin.android)
-    // ⭐️ پلاگین Serialization فقط یک بار با alias تعریف می‌شود (رفع خطای تکراری)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.devtools.ksp)
     alias(libs.plugins.kotlin.serialization)
-    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
 }
 
 android {
     namespace = "com.oqba26.monthlypaymentapp"
     compileSdk = 34
+
+    val keystorePropertiesFile = rootProject.file("keystore.properties")
+    val keystoreProperties = Properties()
+    if (keystorePropertiesFile.exists()) {
+        keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+    }
+
+    fun getProp(name: String): String? {
+        return (keystoreProperties[name] as? String) ?: System.getenv(name) ?: project.findProperty(name) as? String
+    }
 
     defaultConfig {
         applicationId = "com.oqba26.monthlypaymentapp"
@@ -26,34 +40,45 @@ android {
         compose = true
         buildConfig = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = libs.versions.composeCompiler.get()
+
+    signingConfigs {
+        create("release") {
+            val storeFileProp = getProp("RELEASE_STORE_FILE")
+            if (storeFileProp != null) {
+                storeFile = file(storeFileProp)
+                storePassword = getProp("RELEASE_STORE_PASSWORD")
+                keyAlias = getProp("RELEASE_KEY_ALIAS")
+                keyPassword = getProp("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         debug {
-            // ⭐️ استفاده از آدرس نهایی سرور برای Consistency
-            buildConfigField("String", "API_BASE_URL", "\"http://167.235.136.65:8080/\"")
+            buildConfigField("String", "SUPABASE_URL", "\"https://ftufsygeartwukonclkz.supabase.co\"")
+            buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_H4mAU1Ds-vZ22HwMSfCaBQ_QjBfmRd5\"")
         }
         release {
+            val storeFileProp = getProp("RELEASE_STORE_FILE")
+            if (storeFileProp != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // ⭐️ استفاده از آدرس نهایی سرور برای Consistency
-            buildConfigField("String", "API_BASE_URL", "\"http://167.235.136.65:8080/\"")
+            buildConfigField("String", "SUPABASE_URL", "\"https://ftufsygeartwukonclkz.supabase.co\"")
+            buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_H4mAU1Ds-vZ22HwMSfCaBQ_QjBfmRd5\"")
         }
     }
 
     compileOptions {
-        // Align with the JDK version used by Android Studio
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
         isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions { jvmTarget = "21" }
-    // Ensure JDK 21
     kotlin { jvmToolchain(21) }
 
     packaging {
@@ -72,23 +97,28 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.navigation.compose)
-    implementation("androidx.compose.material:material") // برای PullRefresh
+    implementation("androidx.compose.material:material")
     implementation("androidx.compose.material:material-icons-extended-android:1.6.7")
     implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
+
+    // Supabase
+    implementation(libs.supabase.postgrest)
+    implementation(libs.supabase.auth)
+    implementation(libs.supabase.realtime)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
 
     // Core & Coroutines
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
 
-    // Networking (Retrofit, OkHttp)
+    // Networking
     implementation(libs.retrofit.core)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
-
-    // ⭐️ Kotlinx Serialization - حذف وابستگی‌های Gson و تکراری
-    implementation(libs.kotlin.serialization.json) // kotlinx.serialization.json
-    // ⭐️ مبدل Retrofit برای Kotlinx Serialization (فقط این یکی لازم است)
+    implementation(libs.kotlin.serialization.json)
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
 
     // Database (Room)
@@ -102,6 +132,11 @@ dependencies {
     // Utility
     implementation(project(":PersianDate"))
     implementation(libs.google.material)
+
+    // Hilt
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    implementation(libs.hilt.navigation.compose)
 
     // Desugaring
     coreLibraryDesugaring(libs.android.desugar.jdk.libs)
