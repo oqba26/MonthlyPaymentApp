@@ -46,8 +46,6 @@
 - **شبکه:** [Retrofit](https://square.github.io/retrofit/) و [OkHttp](https://square.github.io/okhttp/)
 - **پردازش JSON:** [Kotlinx Serialization](https://github.com/Kotlin/kotlinx.serialization)
 - **ناوبری:** [Jetpack Navigation for Compose](https://developer.android.com/jetpack/compose/navigation)
-- **سمت سرور (Backend):** Node.js با فریم‌ورک Express
-- **پایگاه داده:** MongoDB
 
 
 ## 📝 تغییرات ۱۴۰۴/۰۹/۰۱
@@ -58,4 +56,3 @@
 - نمایش توضیحات پرداخت (در صورت وجود) زیر تاریخ ثبت در صفحه جزئیات فرد.
 - اضافه شدن قابلیت رفرش لیست پرداخت‌نشده‌ها با کشیدن صفحه به پایین (Pull-to-Refresh).
 - حذف دکمه حذف از صفحه آرشیو، فقط دکمه بازیابی باقی مانده است.
-- ذخیره و برگرداندن فیلد توضیحات پرداخت (`description`) در سرور (MongoDB) و نمایش آن در اپ.
