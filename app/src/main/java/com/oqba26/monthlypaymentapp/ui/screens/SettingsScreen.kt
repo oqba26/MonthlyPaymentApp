@@ -55,7 +55,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.oqba26.monthlypaymentapp.core.manager.BackupManager
+import com.oqba26.monthlypaymentapp.core.manager.SnapshotInfo
 import com.oqba26.monthlypaymentapp.utils.PersianDigitsTransformation
+import com.oqba26.monthlypaymentapp.utils.formatTimestampToPersianDateTime
 import com.oqba26.monthlypaymentapp.utils.PersianNumberVisualTransformation
 import com.oqba26.monthlypaymentapp.utils.formatNumberAsPersian
 import com.oqba26.monthlypaymentapp.utils.toPersianDigits
@@ -80,6 +83,9 @@ fun SettingsScreen(onLogout: () -> Unit) {
     val selectedFont by viewModel.selectedFont.collectAsState()
 
     var backupJsonToRestore by remember { mutableStateOf<String?>(null) }
+    var showSnapshotDialog by remember { mutableStateOf(false) }
+    var snapshotToRestore by remember { mutableStateOf<SnapshotInfo?>(null) }
+    val snapshots by viewModel.snapshots.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.toastMessage.collect { message ->
@@ -195,6 +201,17 @@ fun SettingsScreen(onLogout: () -> Unit) {
             }
         }
 
+        // تور نجات: نسخه‌هایی که خودِ برنامه قبل از عملیات پرخطر گرفته است.
+        OutlinedButton(
+            onClick = {
+                viewModel.loadSnapshots()
+                showSnapshotDialog = true
+            },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        ) {
+            Text(stringResource(R.string.auto_backup_button), fontSize = 13.sp)
+        }
+
         Spacer(Modifier.weight(1f))
 
         Button(
@@ -206,6 +223,63 @@ fun SettingsScreen(onLogout: () -> Unit) {
             Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.logout))
+        }
+    }
+
+    if (showSnapshotDialog) {
+        SnapshotListDialog(
+            snapshots = snapshots,
+            onSelect = { snapshotToRestore = it },
+            onDismiss = { showSnapshotDialog = false }
+        )
+    }
+
+    snapshotToRestore?.let { snapshot ->
+        Dialog(onDismissRequest = { snapshotToRestore = null }) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.restore_warning),
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = formatTimestampToPersianDateTime(snapshot.timestamp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = stringResource(R.string.auto_backup_restore_confirm),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = {
+                                    viewModel.restoreSnapshot(snapshot)
+                                    snapshotToRestore = null
+                                    showSnapshotDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                            ) { Text(stringResource(R.string.yes)) }
+
+                            Button(onClick = { snapshotToRestore = null }) {
+                                Text(stringResource(R.string.cancel))
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -253,6 +327,92 @@ fun SettingsScreen(onLogout: () -> Unit) {
     }
 }
 
+/**
+ * لیست نسخه‌های پشتیبان خودکار.
+ *
+ * تاریخ‌ها شمسی و اعداد فارسی نمایش داده می‌شوند تا با بقیه‌ی اپ یکدست باشد.
+ */
+@Composable
+private fun SnapshotListDialog(
+    snapshots: List<SnapshotInfo>,
+    onSelect: (SnapshotInfo) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.auto_backup_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.auto_backup_description),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+
+                    if (snapshots.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.auto_backup_empty),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    } else {
+                        snapshots.forEach { snapshot ->
+                            OutlinedButton(
+                                onClick = { onSelect(snapshot) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = formatTimestampToPersianDateTime(snapshot.timestamp),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = stringResource(
+                                            R.string.auto_backup_item_summary,
+                                            snapshot.personCount.toString().toPersianDigits(),
+                                            snapshot.paymentCount.toString().toPersianDigits()
+                                        ),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Text(
+                                        text = stringResource(snapshotReasonLabel(snapshot.reason)),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** ترجمه‌ی علتِ ذخیره‌شده در نام فایل به متن قابل فهم کاربر. */
+private fun snapshotReasonLabel(reason: String): Int = when (reason) {
+    BackupManager.REASON_BEFORE_SYNC -> R.string.auto_backup_reason_before_sync
+    BackupManager.REASON_BEFORE_RESTORE -> R.string.auto_backup_reason_before_restore
+    BackupManager.REASON_APP_UPGRADE -> R.string.auto_backup_reason_app_upgrade
+    else -> R.string.auto_backup_reason_unknown
+}
+
 @Composable
 fun DefaultAmountSetting(defaultAmount: Double, onSave: (String) -> Unit) {
     var isEditing by remember { mutableStateOf(false) }
@@ -267,7 +427,16 @@ fun DefaultAmountSetting(defaultAmount: Double, onSave: (String) -> Unit) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     OutlinedTextField(
                         value = amountText,
-                        onValueChange = { amountText = it.filter { c -> c.isDigit() } },
+                        onValueChange = { value ->
+                            val digitsOnly = value.filter { it.isDigit() || it in '\u0660'..'\u0669' || it in '\u06f0'..'\u06f9' }
+                            amountText = digitsOnly.map { 
+                                when (it) {
+                                    in '\u0660'..'\u0669' -> (it.code - '\u0660'.code + '0'.code).toChar()
+                                    in '\u06f0'..'\u06f9' -> (it.code - '\u06f0'.code + '0'.code).toChar()
+                                    else -> it
+                                }
+                            }.joinToString("")
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("مبلغ پیش‌فرض (تومان)") },
                         visualTransformation = PersianNumberVisualTransformation(),
@@ -339,6 +508,7 @@ fun ReminderDaySetting(currentDay: Int?, onSave: (String) -> Unit) {
 fun CardNumbersSetting(cardNumbers: List<String>, onAdd: (String) -> Unit, onRemove: (String) -> Unit) {
     var isAdding by remember { mutableStateOf(false) }
     var newCardText by remember { mutableStateOf("") }
+    var cardToRemove by remember { mutableStateOf<String?>(null) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -366,10 +536,22 @@ fun CardNumbersSetting(cardNumbers: List<String>, onAdd: (String) -> Unit, onRem
             cardNumbers.forEach { card ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(card.toPersianDigits(), modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
-                    IconButton(onClick = { onRemove(card) }) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
+                    IconButton(onClick = { cardToRemove = card }) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
                 }
             }
         }
+    }
+
+    cardToRemove?.let { card ->
+        ConfirmDeleteDialog(
+            title = "حذف شماره کارت",
+            message = "آیا از حذف شماره کارت ${card.toPersianDigits()} مطمئن هستید؟",
+            onConfirm = {
+                onRemove(card)
+                cardToRemove = null
+            },
+            onDismiss = { cardToRemove = null }
+        )
     }
 }
 

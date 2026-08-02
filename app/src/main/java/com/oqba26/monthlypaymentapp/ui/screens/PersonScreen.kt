@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
@@ -41,6 +42,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -56,6 +60,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -97,7 +102,7 @@ import org.burnoutcrew.reorderable.reorderable
 fun PersonScreen(
     viewModel: PersonViewModel,
     contactViewModel: ContactViewModel = hiltViewModel(),
-    navController: NavController
+    navController: NavController,
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
@@ -114,7 +119,7 @@ fun PersonScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     val selectedIds by viewModel.selectedIds.collectAsState()
-    val context = LocalContext.current
+    val currentCategory by viewModel.currentCategory.collectAsState()
 
     LaunchedEffect(uiState.unpaidPersons, uiState.paidPersons) {
         val allPersons = uiState.unpaidPersons + uiState.paidPersons
@@ -129,13 +134,19 @@ fun PersonScreen(
     val reorderableState = rememberReorderableLazyListState(
         onMove = { from, to ->
             if (searchQuery.isBlank()) {
-                viewModel.onEvent(
-                    PersonScreenEvent.MovePersonNew(
-                        fromIndex = from.index,
-                        toIndex = to.index,
-                        listType = PersonListType.UNPAID
+                val headerOffset = if (currentCategory == "mosque") 1 else 0
+                val fromIdx = from.index - headerOffset
+                val toIdx = to.index - headerOffset
+                
+                if (fromIdx in uiState.unpaidPersons.indices && toIdx in uiState.unpaidPersons.indices) {
+                    viewModel.onEvent(
+                        PersonScreenEvent.MovePersonNew(
+                            fromIndex = fromIdx,
+                            toIndex = toIdx,
+                            listType = PersonListType.UNPAID
+                        )
                     )
-                )
+                }
             }
         },
         onDragEnd = { _, _ ->
@@ -181,6 +192,17 @@ fun PersonScreen(
                     .fillMaxSize()
                     .reorderable(reorderableState)
             ) {
+                if (currentCategory == "mosque" && uiState.unpaidPersons.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "لیست خیرین (بدهکار)",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+
                 itemsIndexed(uiState.unpaidPersons, key = { _, person -> person.id }) { index, person ->
                     ReorderableItem(reorderableState, key = person.id) { isDragging ->
                         val elevation = animateFloatAsState(if (isDragging) 8f else 0f, label = "").value
@@ -214,6 +236,46 @@ fun PersonScreen(
                         )
                     }
                 }
+
+                if (currentCategory == "mosque" && uiState.paidPersons.isNotEmpty()) {
+                    item {
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp), thickness = 0.5.dp)
+                        Text(
+                            text = "لیست تسویه شدگان",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    itemsIndexed(uiState.paidPersons, key = { _, person -> person.id }) { index, person ->
+                        PersonListItem(
+                            person = person,
+                            index = index + 1 + uiState.unpaidPersons.size,
+                            isSelectionMode = isSelectionMode,
+                            isSelected = selectedIds.contains(person.id),
+                            onPersonClick = {
+                                if (isSelectionMode) {
+                                    viewModel.onEvent(PersonScreenEvent.ToggleSelection(person.id))
+                                } else {
+                                    navController.navigate("person_detail/${person.id}")
+                                }
+                            },
+                            onLongClick = {
+                                if (!isSelectionMode) {
+                                    viewModel.onEvent(PersonScreenEvent.ToggleSelection(person.id))
+                                }
+                            },
+                            onQuickPayClick = { },
+                            onArchiveClick = { selectedPerson ->
+                                personToArchive = selectedPerson
+                            },
+                            onSmsClick = { selectedPerson ->
+                                contactViewModel.onSmsClicked(selectedPerson)
+                            }
+                        )
+                    }
+                }
+
                 item { Spacer(modifier = Modifier.height(60.dp)) }
             }
         }
@@ -229,7 +291,7 @@ fun PersonScreen(
     personForPaymentDialog?.let { person ->
         AddPaymentDialog(
             personName = person.name,
-            defaultAmount = defaultPaymentAmount,
+            defaultAmount = if (person.monthlyCommitment > 0) person.monthlyCommitment else defaultPaymentAmount,
             onConfirm = { amount, description ->
                 viewModel.onEvent(PersonScreenEvent.AddQuickPayment(person.id, amount, description))
                 viewModel.onDismissPaymentDialog()
@@ -261,9 +323,11 @@ fun PersonScreen(
     }
 
     if (isAddPersonDialogShown) {
+        val currentCategory by viewModel.currentCategory.collectAsState()
         AddNewPersonDialog(
-            onConfirm = { name, phone ->
-                viewModel.onEvent(PersonScreenEvent.AddPerson(name, phone, context))
+            isMosqueCategory = currentCategory == "mosque",
+            onConfirm = { name, phone, isAnon, commitment, month, year, initialPayment ->
+                viewModel.onEvent(PersonScreenEvent.AddPerson(name, phone, isAnon, commitment, month, year, initialPayment))
                 viewModel.onDismissAddPersonDialog()
             },
             onDismiss = { viewModel.onDismissAddPersonDialog() },
@@ -436,12 +500,23 @@ fun ContactSuggestionDialog(
 
 @Composable
 fun AddNewPersonDialog(
-    onConfirm: (String, String) -> Unit,
+    isMosqueCategory: Boolean = false,
+    onConfirm: (String, String, Boolean, Double, Int, Int, Double) -> Unit,
     onDismiss: () -> Unit,
     onSearchContact: (String) -> List<ContactMatch>
 ) {
     var name by remember { mutableStateOf("") }
     var phoneNumber by remember { mutableStateOf("") }
+    var isAnonymous by remember { mutableStateOf(value = false) }
+    var monthlyCommitment by remember { mutableStateOf("") }
+    var initialPaymentAmount by remember { mutableStateOf("") }
+    
+    val currentShamsiYear = com.oqba26.monthlypaymentapp.utils.getCurrentShamsiYear()
+    val currentShamsiMonth = com.oqba26.monthlypaymentapp.utils.getCurrentShamsiMonth()
+    
+    var startMonth by remember { mutableIntStateOf(currentShamsiMonth) }
+    var startYear by remember { mutableIntStateOf(currentShamsiYear) }
+    
     var similarContacts by remember { mutableStateOf<List<ContactMatch>>(emptyList()) }
     val context = LocalContext.current
 
@@ -471,97 +546,225 @@ fun AddNewPersonDialog(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        text = "افزودن شخص جدید",
+                        text = if (isAnonymous) "ثبت کمک آنی" else "افزودن شخص جدید",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
 
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            label = { Text("نام شخص") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                    if (isMosqueCategory) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isAnonymous = !isAnonymous }
+                                .padding(vertical = 4.dp)
                         ) {
-                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                OutlinedTextField(
-                                    value = phoneNumber,
-                                    onValueChange = { phoneNumber = it },
-                                    label = { Text("شماره موبایل (اختیاری)") },
-                                    singleLine = true,
-                                    modifier = Modifier.weight(1f),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                    visualTransformation = PersianDigitsTransformation(),
-                                    placeholder = { Text("۰۹---------", textAlign = androidx.compose.ui.text.style.TextAlign.Right) }
-                                )
-                            }
+                            Checkbox(
+                                checked = isAnonymous,
+                                onCheckedChange = { isAnonymous = it }
+                            )
                             Spacer(modifier = Modifier.width(8.dp))
-                            IconButton(
-                                onClick = {
-                                    if (name.isBlank()) {
-                                        Toast.makeText(context, "ابتدا نام را وارد کنید", Toast.LENGTH_SHORT).show()
-                                        return@IconButton
-                                    }
-                                    when (PackageManager.PERMISSION_GRANTED) {
-                                        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) -> {
-                                            val matches = onSearchContact(name)
-                                            if (matches.isNotEmpty()) {
-                                                similarContacts = matches
-                                            } else {
-                                                Toast.makeText(context, "مخاطبی با این نام پیدا نشد", Toast.LENGTH_SHORT).show()
+                            Text("ثبت به صورت خیر ناشناس")
+                        }
+                    }
+
+                    if (!isAnonymous) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                label = { Text("نام شخص") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                    OutlinedTextField(
+                                        value = phoneNumber,
+                                        onValueChange = { phoneNumber = it },
+                                        label = { Text("شماره موبایل (اختیاری)") },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                        visualTransformation = PersianDigitsTransformation(),
+                                        placeholder = {
+                                            Text(
+                                                "۰۹---------",
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Right
+                                            )
+                                        }
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                IconButton(
+                                    onClick = {
+                                        if (name.isBlank()) {
+                                            Toast.makeText(context, "ابتدا نام را وارد کنید", Toast.LENGTH_SHORT)
+                                                .show()
+                                            return@IconButton
+                                        }
+                                        when (PackageManager.PERMISSION_GRANTED) {
+                                            ContextCompat.checkSelfPermission(
+                                                context,
+                                                Manifest.permission.READ_CONTACTS
+                                            ) -> {
+                                                val matches = onSearchContact(name)
+                                                if (matches.isNotEmpty()) {
+                                                    similarContacts = matches
+                                                } else {
+                                                    Toast.makeText(context, "مخاطبی با این نام پیدا نشد", Toast.LENGTH_SHORT)
+                                                        .show()
+                                                }
+                                            }
+
+                                            else -> {
+                                                permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
                                             }
                                         }
-                                        else -> {
-                                            permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                                    }
+                                ) {
+                                    Icon(Icons.Default.Search, contentDescription = "جستجو در مخاطبین")
+                                }
+                            }
+
+                            if (similarContacts.isNotEmpty()) {
+                                Text(
+                                    "موارد مشابه پیدا شده:",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                LazyColumn(
+                                    modifier = Modifier.heightIn(max = 200.dp)
+                                ) {
+                                    items(similarContacts) { match ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    phoneNumber = match.phoneNumber
+                                                    similarContacts = emptyList()
+                                                }
+                                                .padding(vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            RadioButton(
+                                                selected = phoneNumber == match.phoneNumber,
+                                                onClick = {
+                                                    phoneNumber = match.phoneNumber
+                                                    similarContacts = emptyList()
+                                                }
+                                            )
+                                            Column {
+                                                Text(match.nameInContacts, style = MaterialTheme.typography.bodySmall)
+                                                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                                    Text(
+                                                        match.phoneNumber.toPersianDigits(),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = Color.Gray
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
-                            ) {
-                                Icon(Icons.Default.Search, contentDescription = "جستجو در مخاطبین")
                             }
                         }
+                    }
 
-                        if (similarContacts.isNotEmpty()) {
-                            Text(
-                                "موارد مشابه پیدا شده:",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary
+                    if (isMosqueCategory) {
+                        if (isAnonymous) {
+                            OutlinedTextField(
+                                value = initialPaymentAmount,
+                                onValueChange = { value ->
+                                    if (value.length <= 12) {
+                                        val digitsOnly = value.filter { it.isDigit() || (it in '\u0660'..'\u0669') || (it in '\u06f0'..'\u06f9') }
+                                        initialPaymentAmount = digitsOnly.map { 
+                                            when (it) {
+                                                in '\u0660'..'\u0669' -> (it.code - '\u0660'.code + '0'.code).toChar()
+                                                in '\u06f0'..'\u06f9' -> (it.code - '\u06f0'.code + '0'.code).toChar()
+                                                else -> it
+                                            }
+                                        }.joinToString("")
+                                    }
+                                },
+                                label = { Text("مبلغ پرداختی (تومان)") },
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                visualTransformation = com.oqba26.monthlypaymentapp.utils.PersianNumberVisualTransformation()
                             )
-                            LazyColumn(
-                                modifier = Modifier.heightIn(max = 200.dp)
+                        } else {
+                            OutlinedTextField(
+                                value = monthlyCommitment,
+                                onValueChange = { value ->
+                                    if (value.length <= 12) {
+                                        val digitsOnly = value.filter { it.isDigit() || (it in '\u0660'..'\u0669') || (it in '\u06f0'..'\u06f9') }
+                                        monthlyCommitment = digitsOnly.map { 
+                                            when (it) {
+                                                in '\u0660'..'\u0669' -> (it.code - '\u0660'.code + '0'.code).toChar()
+                                                in '\u06f0'..'\u06f9' -> (it.code - '\u06f0'.code + '0'.code).toChar()
+                                                else -> it
+                                            }
+                                        }.joinToString("")
+                                    }
+                                },
+                                label = { Text("مبلغ تعهد ماهانه (تومان) - اختیاری") },
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                visualTransformation = com.oqba26.monthlypaymentapp.utils.PersianNumberVisualTransformation(),
+                                placeholder = { Text("اگر مبلغ ثابتی پرداخت می‌کند وارد کنید") }
+                            )
+                        }
+                    }
+
+                    if (!isAnonymous) {
+                        // انتخاب ماه و سال شروع
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("تاریخ شروع تعهد:", style = MaterialTheme.typography.labelLarge)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(similarContacts) { match ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                phoneNumber = match.phoneNumber
-                                                similarContacts = emptyList()
-                                            }
-                                            .padding(vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                // سال
+                                Box(modifier = Modifier.weight(1f)) {
+                                    var expandedYear by remember { mutableStateOf(false) }
+                                    OutlinedButton(
+                                        onClick = { expandedYear = true },
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        RadioButton(
-                                            selected = phoneNumber == match.phoneNumber,
-                                            onClick = {
-                                                phoneNumber = match.phoneNumber
-                                                similarContacts = emptyList()
-                                            }
-                                        )
-                                        Column {
-                                            Text(match.nameInContacts, style = MaterialTheme.typography.bodySmall)
-                                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                                                Text(
-                                                    match.phoneNumber.toPersianDigits(),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = Color.Gray
-                                                )
-                                            }
+                                        Text("سال ${startYear.toString().toPersianDigits()}")
+                                    }
+                                    DropdownMenu(
+                                        expanded = expandedYear,
+                                        onDismissRequest = { expandedYear = false }) {
+                                        (currentShamsiYear - 1..currentShamsiYear + 1).forEach { y ->
+                                            DropdownMenuItem(
+                                                text = { Text(y.toString().toPersianDigits()) },
+                                                onClick = { startYear = y; expandedYear = false }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // ماه
+                                Box(modifier = Modifier.weight(1f)) {
+                                    var expandedMonth by remember { mutableStateOf(false) }
+                                    OutlinedButton(
+                                        onClick = { expandedMonth = true },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(com.oqba26.monthlypaymentapp.utils.getPersianMonthName(startMonth))
+                                    }
+                                    DropdownMenu(
+                                        expanded = expandedMonth,
+                                        onDismissRequest = { expandedMonth = false }) {
+                                        (1..12).forEach { m ->
+                                            DropdownMenuItem(
+                                                text = { Text(com.oqba26.monthlypaymentapp.utils.getPersianMonthName(m)) },
+                                                onClick = { startMonth = m; expandedMonth = false }
+                                            )
                                         }
                                     }
                                 }
@@ -576,13 +779,15 @@ fun AddNewPersonDialog(
                     ) {
                         Button(
                             onClick = {
-                                if (name.isNotBlank()) {
-                                    onConfirm(name, phoneNumber)
+                                if (isAnonymous || name.isNotBlank()) {
+                                    val commitment = monthlyCommitment.toDoubleOrNull() ?: 0.0
+                                    val initial = initialPaymentAmount.toDoubleOrNull() ?: 0.0
+                                    onConfirm(name, phoneNumber, isAnonymous, commitment, startMonth, startYear, initial)
                                 }
                             },
-                            enabled = name.isNotBlank()
+                            enabled = isAnonymous || name.isNotBlank()
                         ) {
-                            Text("افزودن")
+                            Text(if (isAnonymous) "ثبت کمک" else "افزودن")
                         }
                         Button(
                             onClick = onDismiss,
@@ -913,6 +1118,15 @@ fun PersonListItem(
                 }
             }
 
+            if (person.needsSync) {
+                Icon(
+                    imageVector = Icons.Default.Sync,
+                    contentDescription = "Pending Sync",
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(16.dp).padding(horizontal = 2.dp)
+                )
+            }
+
             Spacer(Modifier.width(4.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -943,40 +1157,3 @@ fun PersonListItem(
     }
 }
 
-@Composable
-fun AddPaymentDialog(
-    personName: String,
-    defaultAmount: Double,
-    onConfirm: (Double, String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var amount by remember { mutableStateOf(defaultAmount.toString()) }
-    var description by remember { mutableStateOf("") }
-
-    Dialog(onDismissRequest = onDismiss) {
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-            Card(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(24.dp)) {
-                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text(text = "ثبت پرداخت سریع برای $personName", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    OutlinedTextField(
-                        value = amount,
-                        onValueChange = { amount = it },
-                        label = { Text("مبلغ") },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                    OutlinedTextField(
-                        value = description,
-                        onValueChange = { description = it },
-                        label = { Text("توضیحات") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Button(onClick = onDismiss) { Text("لغو") }
-                        Button(onClick = { onConfirm(amount.toDoubleOrNull() ?: 0.0, description) }) { Text("ثبت") }
-                    }
-                }
-            }
-        }
-    }
-}

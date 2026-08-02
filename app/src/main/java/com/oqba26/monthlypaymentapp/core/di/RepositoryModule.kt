@@ -29,9 +29,10 @@ object RepositoryModule {
     fun provideLocalPersonRepository(
         personDao: PersonDao,
         paymentDao: PaymentDao,
+        syncQueueDao: com.oqba26.monthlypaymentapp.data.dao.SyncQueueDao,
         database: AppDatabase
     ): LocalPersonRepository {
-        return LocalPersonRepository(personDao, paymentDao, database)
+        return LocalPersonRepository(personDao, paymentDao, syncQueueDao, database)
     }
 
     @Provides

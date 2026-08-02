@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -68,6 +69,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -183,6 +186,11 @@ fun MainAppHost(viewModel: PersonViewModel) {
                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             }
         }
+        launch {
+            contactViewModel.toastMessage.collect { message ->
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     // UI elements for update and permissions
@@ -265,9 +273,18 @@ fun AuthenticatedContent(viewModel: PersonViewModel, contactViewModel: ContactVi
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: ""
 
+    LaunchedEffect(currentRoute) {
+        if (currentRoute == Screen.Mosque.route) {
+            viewModel.onEvent(PersonScreenEvent.SetCategory("mosque"))
+        } else if (currentRoute in listOf(Screen.Unpaid.route, Screen.Paid.route)) {
+            viewModel.onEvent(PersonScreenEvent.SetCategory("salary"))
+        }
+    }
+
     val showBottomBar = currentRoute in listOf(
         Screen.Unpaid.route,
         Screen.Paid.route,
+        Screen.Mosque.route,
         Screen.Archive.route,
         Screen.Settings.route
     )
@@ -358,10 +375,17 @@ fun AuthenticatedContent(viewModel: PersonViewModel, contactViewModel: ContactVi
                 title = {
                     val titleText = when {
                         isSelectionMode -> "انتخاب شده‌ها"
-                        currentRoute == Screen.Settings.route -> "تنظیمات"
+                else -> {
+                    val currentRoute = navController.currentBackStackEntry?.destination?.route
+                    when (currentRoute) {
+                        Screen.Mosque.route -> "مدیریت کمک‌های مسجد"
+                        Screen.Settings.route -> "تنظیمات"
+                        Screen.Archive.route -> "آرشیو"
                         else -> "مدیریت حقوق ماهانه"
                     }
-                    Text(titleText)
+                }
+            }
+            Text(titleText)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = if (isSelectionMode) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primary,
@@ -390,7 +414,7 @@ fun AuthenticatedContent(viewModel: PersonViewModel, contactViewModel: ContactVi
                         IconButton(onClick = { showConfirmMoveDialog = true }) {
                             Icon(Icons.Default.Check, contentDescription = "Confirm Move", tint = Color.Green)
                         }
-                    } else if (currentRoute == Screen.Unpaid.route) {
+                    } else if (currentRoute == Screen.Unpaid.route || currentRoute == Screen.Mosque.route) {
                         FilledIconButton(
                             onClick = { viewModel.onAddPersonClicked() },
                             colors = IconButtonDefaults.filledIconButtonColors(
@@ -437,6 +461,13 @@ fun AuthenticatedContent(viewModel: PersonViewModel, contactViewModel: ContactVi
                     navController = navController
                 )
             }
+            composable(Screen.Mosque.route) {
+                PersonScreen(
+                    viewModel = viewModel,
+                    contactViewModel = contactViewModel,
+                    navController = navController
+                )
+            }
             composable(Screen.Paid.route) {
                 PaidListScreen(
                     viewModel = viewModel,
@@ -475,17 +506,19 @@ fun AppBottomNavigationBar(navController: NavController) {
         Screen.Unpaid,
         Screen.Paid,
         Screen.Archive,
+        Screen.Mosque,
         Screen.Settings
     )
 
     NavigationBar(
-        containerColor = MaterialTheme.colorScheme.primary // Match TopAppBar
+        containerColor = MaterialTheme.colorScheme.primary
     ) {
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentDestination = navBackStackEntry?.destination
 
         items.forEach { screen ->
             NavigationBarItem(
+                alwaysShowLabel = true,
                 colors = NavigationBarItemDefaults.colors(
                     selectedTextColor = Color.White,
                     selectedIconColor = Color.White,
@@ -494,7 +527,15 @@ fun AppBottomNavigationBar(navController: NavController) {
                     unselectedIconColor = Color.White.copy(alpha = 0.7f)
                 ),
                 icon = { Icon(screen.icon, contentDescription = screen.title) },
-                label = { Text(screen.title) },
+                label = { 
+                    Text(
+                        text = screen.title,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelSmall
+                    ) 
+                },
                 selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                 onClick = {
                     navController.navigate(screen.route) {
@@ -517,6 +558,7 @@ sealed class Screen(
 ) {
     data object Unpaid : Screen("unpaid_list", "پرداخت نشده", Icons.AutoMirrored.Filled.List)
     data object Paid : Screen("paid_list", "پرداخت شده", Icons.Default.Paid)
+    data object Mosque : Screen("mosque_list", "مسجد", Icons.Default.AccountBalance)
     data object Archive : Screen("archive", "آرشیو", Icons.Default.Archive)
     data object Settings : Screen("settings", "تنظیمات", Icons.Default.Settings)
 }

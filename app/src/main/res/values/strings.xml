@@ -21,6 +21,19 @@
     <string name="backup_error">خطا در ایجاد فایل پشتیبان</string>
     <string name="restore_warning">هشدار بازیابی</string>
     <string name="restore_warning_text">با بازیابی، تمام داده‌های فعلی حذف و اطلاعات فایل جایگزین می‌شود. مطمئن هستید؟</string>
+
+    <!-- نسخه‌های پشتیبان خودکار (تور نجات) -->
+    <string name="auto_backup_button">نسخه‌های خودکار</string>
+    <string name="auto_backup_title">بازگردانی از نسخه‌ی خودکار</string>
+    <string name="auto_backup_description">برنامه قبل از هر عملیات پرخطر، خودش یک نسخه از اطلاعات شما ذخیره می‌کند. اگر داده‌ای گم شد، می‌توانید از اینجا برش گردانید.</string>
+    <string name="auto_backup_empty">هنوز نسخه‌ی خودکاری ذخیره نشده است.</string>
+    <string name="auto_backup_item_summary">%1$s نفر، %2$s پرداخت</string>
+    <string name="auto_backup_restore_confirm">با بازگردانی این نسخه، اطلاعات فعلی جایگزین می‌شود. مطمئن هستید؟</string>
+    <string name="auto_backup_reason_before_sync">قبل از همگام‌سازی با سرور</string>
+    <string name="auto_backup_reason_before_restore">قبل از بازیابی نسخه‌ی پشتیبان</string>
+    <string name="auto_backup_reason_app_upgrade">بعد از به‌روزرسانی برنامه</string>
+    <string name="auto_backup_reason_unknown">نسخه‌ی خودکار</string>
+    <string name="close">بستن</string>
     <string name="logout">خروج از حساب کاربری</string>
     <string name="default_payment_amount">مبلغ پیش‌فرض پرداخت</string>
     <string name="reminder_day">روز یادآور ماهانه</string>

@@ -1,61 +1,36 @@
-@file:Suppress("unused")
-
 package com.oqba26.monthlypaymentapp.data.database
 
-import android.content.Context
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.Transaction
 import com.oqba26.monthlypaymentapp.data.dao.PaymentDao
 import com.oqba26.monthlypaymentapp.data.dao.PersonDao
-import com.oqba26.monthlypaymentapp.data.model.BackupData
+import com.oqba26.monthlypaymentapp.data.dao.SyncQueueDao
 import com.oqba26.monthlypaymentapp.data.model.PaymentRecord
 import com.oqba26.monthlypaymentapp.data.model.Person
-import java.util.UUID
+import com.oqba26.monthlypaymentapp.data.model.SyncQueue
 
+/**
+ * دیتابیس محلی اپ.
+ *
+ * ساخت instance اینجا انجام نمی‌شود؛ تنها مسیر ساخت،
+ * [com.oqba26.monthlypaymentapp.core.di.DatabaseModule] است. قبلاً علاوه بر هیلت یک
+ * `INSTANCE` دستی هم اینجا بود — دو مسیر ساخت یعنی ریسک دو اتصال جدا به یک فایل دیتابیس.
+ *
+ * از نسخه ۱۸، `exportSchema = true` است و اسکیما در `app/schemas/` ذخیره می‌شود.
+ * مهاجرت‌ها در [Migrations.kt] هستند.
+ */
 @Database(
-    entities = [Person::class, PaymentRecord::class],
-    version = 13, // حتماً نسخه را بالا ببری که اسکیمای جدید اعمال شود
-    exportSchema = false
+    entities = [Person::class, PaymentRecord::class, SyncQueue::class],
+    version = 18,
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun personDao(): PersonDao
     abstract fun paymentDao(): PaymentDao
-
-    @Transaction
-    open suspend fun performRestore(backupData: BackupData) {
-        // تمیزکاری قبل از درج بکاپ
-        val safePersons = backupData.persons.map { p ->
-            val name = p.name.trim()
-            val id = p.id.ifBlank { UUID.randomUUID().toString() }
-            Person(id = id, name = name)
-        }
-        personDao().deleteAll()
-        paymentDao().deleteAllPaymentRecords()
-        personDao().insertAll(safePersons)
-        paymentDao().insertAllPaymentRecords(backupData.payments)
-    }
+    abstract fun syncQueueDao(): SyncQueueDao
 
     companion object {
-        @Volatile
-        private var INSTANCE: AppDatabase? = null
-
-        fun getInstance(context: Context): AppDatabase = getDatabase(context)
-
-        private fun getDatabase(context: Context): AppDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "monthly_payment_db"
-                )
-                    .fallbackToDestructiveMigration()
-                    .build()
-                INSTANCE = instance
-                instance
-            }
-        }
+        const val DATABASE_NAME = "monthly_payment_db"
     }
 }

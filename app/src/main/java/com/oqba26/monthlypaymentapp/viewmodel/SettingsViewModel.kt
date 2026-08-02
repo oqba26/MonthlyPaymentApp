@@ -2,15 +2,19 @@ package com.oqba26.monthlypaymentapp.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.oqba26.monthlypaymentapp.core.manager.BackupManager
+import com.oqba26.monthlypaymentapp.core.manager.SnapshotInfo
 import com.oqba26.monthlypaymentapp.data.model.BackupData
 import com.oqba26.monthlypaymentapp.data.repository.LocalPersonRepository
 import com.oqba26.monthlypaymentapp.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
@@ -19,7 +23,8 @@ import kotlinx.serialization.json.Json
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val localPersonRepository: LocalPersonRepository
+    private val localPersonRepository: LocalPersonRepository,
+    private val backupManager: BackupManager
 ) : ViewModel() {
 
     private val json = Json {
@@ -98,10 +103,32 @@ class SettingsViewModel @Inject constructor(
         return json.encodeToString(backupData)
     }
 
+    // ---------------------------------------------- نسخه‌های پشتیبان خودکار (تور نجات)
+
+    private val _snapshots = MutableStateFlow<List<SnapshotInfo>>(emptyList())
+    val snapshots: StateFlow<List<SnapshotInfo>> = _snapshots.asStateFlow()
+
+    fun loadSnapshots() {
+        viewModelScope.launch { _snapshots.value = backupManager.listSnapshots() }
+    }
+
+    fun restoreSnapshot(info: SnapshotInfo) {
+        viewModelScope.launch {
+            val ok = backupManager.restoreSnapshot(info.file)
+            _toastMessage.emit(
+                if (ok) "اطلاعات از نسخه‌ی خودکار بازگردانی شد. لطفاً برنامه را مجدد اجرا کنید."
+                else "بازگردانی ناموفق بود؛ فایل پشتیبان سالم نیست."
+            )
+            loadSnapshots()
+        }
+    }
+
     fun restoreFromBackupJson(jsonString: String) {
         viewModelScope.launch {
             try {
                 val backupData = json.decodeFromString<BackupData>(jsonString)
+                // قبل از جایگزینی، وضعیت فعلی نگه داشته می‌شود تا راه برگشت بسته نشود.
+                backupManager.createSnapshot(BackupManager.REASON_BEFORE_RESTORE)
                 localPersonRepository.restoreBackup(backupData)
                 _toastMessage.emit("اطلاعات با موفقیت بازیابی شد! لطفاً برنامه را مجدد اجرا کنید.")
             } catch (_: Exception) {

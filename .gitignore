@@ -1,17 +1,28 @@
+# Gradle files
+.gradle/
+build/
+
+# IntelliJ IDEA files
+.idea/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+
+# Local configuration
 local.properties
 keystore.properties
+
+# Android Studio captures
+captures/
+
+# External native builds
+.externalNativeBuild/
+.cxx/
+
+# Key store files
 *.jks
+*.keystore
+
+# Assistant Artifacts
+.artifacts/
+
+# System files
+.DS_Store

@@ -1,2 +1,0 @@
-com.github.samanzamani.persiandate
-string app_name

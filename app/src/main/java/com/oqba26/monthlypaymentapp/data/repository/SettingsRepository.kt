@@ -5,9 +5,11 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -25,8 +27,17 @@ class SettingsRepository(context: Context) {
         val CARD_NUMBERS = stringPreferencesKey("card_numbers")
         val IGNORED_CONTACT_SUGGESTIONS = stringPreferencesKey("ignored_contact_suggestions")
 
+        /** آخرین versionCodeی که با آن اجرا شده — مبنای تشخیص ارتقای نسخه برای گرفتن snapshot. */
+        val LAST_RUN_VERSION_CODE = intPreferencesKey("last_run_version_code")
+
         const val FALLBACK_AMOUNT = 200000.0
         const val DEFAULT_FONT = "Estedad"
+    }
+
+    suspend fun getLastRunVersionCode(): Int? = dataStore.data.first()[LAST_RUN_VERSION_CODE]
+
+    suspend fun saveLastRunVersionCode(versionCode: Int) {
+        dataStore.edit { it[LAST_RUN_VERSION_CODE] = versionCode }
     }
 
     val reminderDayFlow: Flow<Int?> = dataStore.data.map {

@@ -22,6 +22,13 @@ interface PaymentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllPaymentRecords(payments: List<PaymentRecord>)
 
+    @Query("DELETE FROM payments WHERE id = :paymentId")
+    suspend fun deleteById(paymentId: String)
+
+    /** حذف گروهی — برای اعمال [com.oqba26.monthlypaymentapp.data.sync.MergePlan] در یک کوئری. */
+    @Query("DELETE FROM payments WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
+
     @Query("DELETE FROM payments")
     suspend fun deleteAllPaymentRecords()
 }

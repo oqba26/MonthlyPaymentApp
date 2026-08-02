@@ -34,9 +34,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
@@ -47,6 +50,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +62,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import com.oqba26.monthlypaymentapp.utils.PersianNumberVisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -92,18 +97,21 @@ fun PersonDetailScreen(
 
     val detailState by viewModel.personDetailState.collectAsState()
     val defaultPaymentAmount by viewModel.defaultPaymentAmountFlow.collectAsState(initial = 0.0)
-    val context = LocalContext.current
 
     var expandedMonth by remember { mutableStateOf<Int?>(null) }
     var editingPayment by remember { mutableStateOf<PaymentRecord?>(null) }
     var addingPaymentMonth by remember { mutableStateOf<Int?>(null) }
     var editingPerson by remember { mutableStateOf(value = false) }
-    var showBulkPaymentDialog by remember { mutableStateOf(false) }
+    var showBulkPaymentDialog by remember { mutableStateOf(value = false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        val displayName = detailState.person?.let { p ->
+            if (p.isAnonymous && (p.category == "mosque")) "خیر ناشناس (${p.name})" else p.name
+        } ?: "..."
+
         PersonDetailHeader(
-            name = detailState.person?.name ?: "...",
-            onBack = { navController.popBackStack() }
+            name = displayName,
+            onBack = { navController.popBackStack() },
         ) { editingPerson = true }
 
         if (detailState.person == null) {
@@ -113,14 +121,15 @@ fun PersonDetailScreen(
         } else {
             YearSelector(
                 year = detailState.selectedYear,
-                onYearChange = { offset ->
-                    viewModel.onEvent(PersonScreenEvent.ChangeYear(offset))
-                }
-            )
+            ) { offset ->
+                viewModel.onEvent(PersonScreenEvent.ChangeYear(offset))
+            }
 
             val availableMonths = detailState.monthStates
+                .asSequence()
                 .filter { it.status == MonthStatus.AVAILABLE }
                 .map { it.month }
+                .toList()
 
             if (availableMonths.isNotEmpty()) {
                 Button(
@@ -140,6 +149,8 @@ fun PersonDetailScreen(
                 items(detailState.monthStates) { monthModel ->
                     MonthListItem(
                         month = monthModel,
+                        personName = detailState.person?.name ?: "",
+                        startMonth = detailState.person?.startMonth ?: 1,
                         onHeaderClick = {
                             expandedMonth = if (expandedMonth == monthModel.month) null else monthModel.month
                         },
@@ -190,7 +201,9 @@ fun PersonDetailScreen(
 
         AddPaymentDialog(
             personName = detailState.person?.name ?: "",
-            defaultAmount = defaultPaymentAmount,
+            defaultAmount = if ((detailState.person?.monthlyCommitment ?: 0.0) > 0) 
+                detailState.person!!.monthlyCommitment 
+            else defaultPaymentAmount,
             initialDescription = initialDesc,
             onConfirm = { amount, description ->
                 viewModel.onEvent(
@@ -204,18 +217,21 @@ fun PersonDetailScreen(
                 )
                 addingPaymentMonth = null
             },
-            onDismiss = {
-                addingPaymentMonth = null
-            }
+            onDismiss = { addingPaymentMonth = null }
         )
     }
 
     if (editingPerson) {
+        val currentCategory by viewModel.currentCategory.collectAsState()
         UpdatePersonDialog(
             initialName = detailState.person?.name ?: "",
             initialPhone = detailState.person?.phoneNumber,
-            onConfirm = { name, phone ->
-                viewModel.onEvent(PersonScreenEvent.UpdatePerson(personId, name, phone))
+            initialCommitment = detailState.person?.monthlyCommitment ?: 0.0,
+            initialStartMonth = detailState.person?.startMonth ?: 1,
+            initialStartYear = detailState.person?.startYear ?: com.oqba26.monthlypaymentapp.utils.getCurrentShamsiYear(),
+            isMosqueCategory = currentCategory == "mosque",
+            onConfirm = { name, phone, commitment, month, year ->
+                viewModel.onEvent(PersonScreenEvent.UpdatePerson(personId, name, phone, commitment, month, year))
                 editingPerson = false
             },
             onDismiss = { editingPerson = false },
@@ -227,12 +243,18 @@ fun PersonDetailScreen(
 
     if (showBulkPaymentDialog) {
         val availableMonths = detailState.monthStates
+            .asSequence()
             .filter { it.status == MonthStatus.AVAILABLE }
             .map { it.month }
+            .toList()
         
+        val bulkDefaultAmount = if ((detailState.person?.monthlyCommitment ?: 0.0) > 0)
+            detailState.person!!.monthlyCommitment
+        else defaultPaymentAmount
+
         BulkPaymentDialog(
             availableMonths = availableMonths,
-            defaultAmount = defaultPaymentAmount,
+            defaultAmount = bulkDefaultAmount,
             onConfirm = { selected, amount ->
                 viewModel.onEvent(
                     PersonScreenEvent.AddBulkPayments(
@@ -244,8 +266,7 @@ fun PersonDetailScreen(
                 )
                 showBulkPaymentDialog = false
             },
-            onDismiss = { showBulkPaymentDialog = false }
-        )
+        ) { showBulkPaymentDialog = false }
     }
 }
 
@@ -254,7 +275,7 @@ fun BulkPaymentDialog(
     availableMonths: List<Int>,
     defaultAmount: Double,
     onConfirm: (List<Int>, Double) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val selectedMonths = remember { mutableStateListOf<Int>().apply { addAll(availableMonths) } }
     var amountText by remember { mutableStateOf(defaultAmount.toInt().toString()) }
@@ -307,17 +328,28 @@ fun BulkPaymentDialog(
 
                     OutlinedTextField(
                         value = amountText,
-                        onValueChange = { amountText = it },
+                        onValueChange = { value ->
+                            // اجازه ورود فقط به اعداد (چه انگلیسی چه فارسی)
+                            val digitsOnly = value.filter { it.isDigit() || (((it in '\u0660'..'\u0669') || (it in '\u06f0'..'\u06f9'))) }
+                            // تبدیل اعداد فارسی به انگلیسی برای ذخیره در استیت
+                            amountText = digitsOnly.map { 
+                                when (it) {
+                                    in '\u0660'..'\u0669' -> ((it.code - '\u0660'.code) + '0'.code).toChar()
+                                    in '\u06f0'..'\u06f9' -> ((it.code - '\u06f0'.code) + '0'.code).toChar()
+                                    else -> it
+                                }
+                            }.joinToString("")
+                        },
                         label = { Text("مبلغ برای هر ماه (تومان)") },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        visualTransformation = PersianDigitsTransformation()
+                        visualTransformation = PersianNumberVisualTransformation()
                     )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Button(
                             onClick = {
@@ -343,7 +375,7 @@ fun BulkPaymentDialog(
 private fun PersonDetailHeader(
     name: String,
     onBack: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
 ) {
     Surface(color = MaterialTheme.colorScheme.primary, contentColor = Color.White) {
         Row(
@@ -371,12 +403,22 @@ private fun PersonDetailHeader(
 fun UpdatePersonDialog(
     initialName: String,
     initialPhone: String?,
-    onConfirm: (String, String) -> Unit,
+    initialCommitment: Double = 0.0,
+    initialStartMonth: Int = 1,
+    initialStartYear: Int = 1403,
+    isMosqueCategory: Boolean = false,
+    onConfirm: (String, String, Double, Int, Int) -> Unit,
     onDismiss: () -> Unit,
-    onSearchContact: (String) -> List<ContactMatch>
+    onSearchContact: (String) -> List<ContactMatch>,
 ) {
     var name by remember { mutableStateOf(initialName) }
     var phoneNumber by remember { mutableStateOf(initialPhone ?: "") }
+    var monthlyCommitment by remember { mutableStateOf(if (initialCommitment > 0) initialCommitment.toInt().toString() else "") }
+    
+    val currentShamsiYear = com.oqba26.monthlypaymentapp.utils.getCurrentShamsiYear()
+    var startMonth by remember { mutableIntStateOf(initialStartMonth) }
+    var startYear by remember { mutableIntStateOf(initialStartYear) }
+    
     var similarContacts by remember { mutableStateOf<List<ContactMatch>>(emptyList()) }
     val context = LocalContext.current
 
@@ -469,6 +511,28 @@ fun UpdatePersonDialog(
                         }
                     }
 
+                    if (isMosqueCategory) {
+                        OutlinedTextField(
+                            value = monthlyCommitment,
+                            onValueChange = { value ->
+                                if (value.length <= 12) {
+                                    val digitsOnly = value.filter { it.isDigit() || (((it in '\u0660'..'\u0669') || (it in '\u06f0'..'\u06f9'))) }
+                                    monthlyCommitment = digitsOnly.map { 
+                                        when (it) {
+                                            in '\u0660'..'\u0669' -> ((it.code - '\u0660'.code) + '0'.code).toChar()
+                                            in '\u06f0'..'\u06f9' -> ((it.code - '\u06f0'.code) + '0'.code).toChar()
+                                            else -> it
+                                        }
+                                    }.joinToString("")
+                                }
+                            },
+                            label = { Text("مبلغ تعهد ماهانه (تومان)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            visualTransformation = PersianNumberVisualTransformation()
+                        )
+                    }
+
                     if (similarContacts.isNotEmpty()) {
                         Text(
                             "موارد مشابه پیدا شده:",
@@ -511,15 +575,63 @@ fun UpdatePersonDialog(
                         }
                     }
 
+                    // انتخاب ماه و سال شروع
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("تاریخ شروع تعهد:", style = MaterialTheme.typography.labelLarge)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // سال
+                            Box(modifier = Modifier.weight(1f)) {
+                                var expandedYear by remember { mutableStateOf(false) }
+                                OutlinedButton(
+                                    onClick = { expandedYear = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("سال ${startYear.toString().toPersianDigits()}")
+                                }
+                                DropdownMenu(expanded = expandedYear, onDismissRequest = { expandedYear = false }) {
+                                    (currentShamsiYear - 1..currentShamsiYear + 1).forEach { y ->
+                                        DropdownMenuItem(
+                                            text = { Text(y.toString().toPersianDigits()) },
+                                            onClick = { startYear = y; expandedYear = false }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // ماه
+                            Box(modifier = Modifier.weight(1f)) {
+                                var expandedMonth by remember { mutableStateOf(false) }
+                                OutlinedButton(
+                                    onClick = { expandedMonth = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(com.oqba26.monthlypaymentapp.utils.getPersianMonthName(startMonth))
+                                }
+                                DropdownMenu(expanded = expandedMonth, onDismissRequest = { expandedMonth = false }) {
+                                    (1..12).forEach { m ->
+                                        DropdownMenuItem(
+                                            text = { Text(com.oqba26.monthlypaymentapp.utils.getPersianMonthName(m)) },
+                                            onClick = { startMonth = m; expandedMonth = false }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Button(
                             onClick = {
                                 if (name.isNotBlank()) {
-                                    onConfirm(name, phoneNumber)
+                                    val commitment = monthlyCommitment.toDoubleOrNull() ?: 0.0
+                                    onConfirm(name, phoneNumber, commitment, startMonth, startYear)
                                 }
                             },
                             enabled = name.isNotBlank()
@@ -573,19 +685,37 @@ fun YearSelector(year: Int, onYearChange: (Int) -> Unit) {
 @Composable
 fun MonthListItem(
     month: MonthUiModel,
+    personName: String,
+    startMonth: Int,
     onHeaderClick: () -> Unit,
     onEditClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val containerColor = when (month.status) {
         MonthStatus.PAID -> MaterialTheme.colorScheme.primaryContainer
         MonthStatus.AVAILABLE -> MaterialTheme.colorScheme.surface
+        MonthStatus.NOT_COMMITTED -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
 
     Card(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth().clickable(onClick = onHeaderClick),
+        modifier = Modifier
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .fillMaxWidth()
+            .clickable {
+                if (month.status == MonthStatus.NOT_COMMITTED) {
+                    val monthName = getPersianMonthName(startMonth)
+                    Toast.makeText(
+                        context,
+                        "ماه‌های قبل از $monthName ماه جزو تعهدات این فرد نیست",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    onHeaderClick()
+                }
+            },
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (month.status == MonthStatus.NOT_COMMITTED) 0.dp else 1.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(
@@ -594,13 +724,18 @@ fun MonthListItem(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = getPersianMonthName(month.month), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    if (month.status == MonthStatus.PAID && month.payment != null) {
+                    Text(
+                        text = getPersianMonthName(month.month),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (month.status == MonthStatus.NOT_COMMITTED) Color.Gray else Color.Unspecified
+                    )
+                    if ((month.status == MonthStatus.PAID) && (month.payment != null)) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(text = "${formatNumberAsPersian(month.payment.amount)} ت", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-                if (month.status == MonthStatus.PAID || month.status == MonthStatus.AVAILABLE) {
+                if ((month.status == MonthStatus.PAID) || (month.status == MonthStatus.AVAILABLE)) {
                     Button(
                         onClick = onEditClick,
                         colors = ButtonDefaults.buttonColors(
@@ -611,7 +746,7 @@ fun MonthListItem(
                     }
                 }
             }
-            if (month.status == MonthStatus.PAID && month.payment != null) {
+            if ((month.status == MonthStatus.PAID) && (month.payment != null)) {
                 val desc = month.payment.description ?: ""
                 if (desc.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))

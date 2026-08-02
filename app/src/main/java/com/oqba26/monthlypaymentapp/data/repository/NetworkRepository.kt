@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.util.UUID
 
 class NetworkRepository {
@@ -29,20 +31,31 @@ class NetworkRepository {
     private val _paymentsFlow = MutableStateFlow<List<PaymentRecord>>(emptyList())
     private val repositoryScope = CoroutineScope(Dispatchers.IO)
 
+    /**
+     * تا وقتی حداقل یک [refresh] موفق انجام نشده باشد `false` است.
+     *
+     * چرا لازم است: مقدار اولیه‌ی `_personsFlow`/`_paymentsFlow` لیست خالی است و از لیست خالیِ
+     * واقعی (کاربری که هنوز داده‌ای ثبت نکرده) قابل تشخیص نیست. merge کردن روی آن لیست خالیِ
+     * قالبی، همه‌ی داده‌ی محلی را پاک می‌کند. مصرف‌کننده باید منتظر `true` بماند.
+     */
+    private val _hasServerData = MutableStateFlow(false)
+    fun hasServerDataFlow(): Flow<Boolean> = _hasServerData.asStateFlow()
+
     // --- Realtime Operations ---
     fun observeRealtimeChanges() {
         repositoryScope.launch {
             try {
+                // اطمینان از اتصال قبل از اشتراک در کانال
                 supabase.realtime.connect()
+                
                 val myChannel = supabase.channel("db-changes")
                 
                 // گوش دادن به تغییرات جدول اشخاص
-                launch {
-                    myChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
-                        table = "persons"
-                    }.collect {
-                        refresh()
-                    }
+                myChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
+                    table = "persons"
+                }.collect {
+                    Log.d("Supabase-Realtime", "Change detected in persons table")
+                    refresh()
                 }
 
                 // گوش دادن به تغییرات جدول پرداخت‌ها
@@ -50,13 +63,15 @@ class NetworkRepository {
                     myChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
                         table = "payments"
                     }.collect {
+                        Log.d("Supabase-Realtime", "Change detected in payments table")
                         refresh()
                     }
                 }
                 
                 myChannel.subscribe()
+                Log.d("Supabase-Realtime", "Subscribed to all changes")
             } catch (e: Exception) {
-                Log.e("Supabase", "Realtime connection error", e)
+                Log.e("Supabase-Realtime", "Realtime connection error, retrying...", e)
             }
         }
     }
@@ -91,26 +106,36 @@ class NetworkRepository {
     }
 
     // --- Person Operations ---
-    suspend fun addPerson(person: Person): Int? {
+    /**
+     * ارسال شخص به سرور با upsert.
+     *
+     * upsert (و نه insert) عمداً انتخاب شده تا این عملیات idempotent باشد: اگر تلاش اول
+     * به سرور رسیده باشد ولی پاسخش به‌خاطر timeout به ما نرسیده باشد، تلاش دوم رکورد
+     * تکراری نمی‌سازد. صف سینک متکی به همین خاصیت است تا بتواند بی‌خطر retry کند.
+     *
+     * اعتبارسنجی تکراری‌بودن نام اینجا انجام نمی‌شود؛ آن کار در PersonViewModel روی
+     * داده‌ی محلی (که همیشه کامل است) انجام می‌گیرد. کش _personsFlow ممکن است خالی یا
+     * قدیمی باشد و نتیجه‌ی غلط بدهد.
+     */
+    suspend fun addPerson(person: Person): Boolean {
         return try {
             val trimmedName = person.name.trim()
-            if (trimmedName.isEmpty()) return 400
+            if (trimmedName.isEmpty()) {
+                Log.w("Supabase", "addPerson skipped: blank name")
+                return false
+            }
 
-            // بررسی تکراری بودن نام در لیست موجود
-            val isDuplicate = _personsFlow.value.any { it.name.trim().equals(trimmedName, ignoreCase = true) }
-            if (isDuplicate) return 409
-            
-            val personToInsert = if (person.id.isEmpty()) {
+            val personToUpsert = if (person.id.isEmpty()) {
                 person.copy(id = UUID.randomUUID().toString(), name = trimmedName, createdAt = System.currentTimeMillis())
             } else {
                 person.copy(name = trimmedName)
             }
-            
-            supabase.from("persons").insert(personToInsert)
-            201 
+
+            supabase.from("persons").upsert(personToUpsert)
+            true
         } catch (e: Exception) {
             Log.e("Supabase", "addPerson error", e)
-            null
+            false
         }
     }
 
@@ -125,22 +150,37 @@ class NetworkRepository {
         }
     }
 
-    suspend fun updatePerson(personId: String, name: String, phoneNumber: String?): Int {
+    suspend fun updatePerson(
+        personId: String, 
+        name: String, 
+        phoneNumber: String?, 
+        monthlyCommitment: Double,
+        startMonth: Int,
+        startYear: Int
+    ): Int {
         return try {
             val trimmedName = name.trim()
             if (trimmedName.isEmpty()) return 400
 
-            // بررسی تکراری بودن نام (به جز خودِ این شخص)
+            val currentPerson = _personsFlow.value.find { it.id == personId }
+            val currentCategory = currentPerson?.category ?: "salary"
+
+            // بررسی تکراری بودن نام در همان دسته‌بندی (به جز خودِ این شخص)
             val isDuplicate = _personsFlow.value.any { 
-                it.id != personId && it.name.trim().equals(trimmedName, ignoreCase = true) 
+                it.id != personId && 
+                it.category == currentCategory && 
+                it.name.trim().equals(trimmedName, ignoreCase = true) 
             }
             if (isDuplicate) return 409
 
             supabase.from("persons").update(
-                mapOf(
-                    "name" to trimmedName,
-                    "phoneNumber" to phoneNumber?.trim()
-                )
+                buildJsonObject {
+                    put("name", trimmedName)
+                    put("phoneNumber", phoneNumber?.trim())
+                    put("monthlyCommitment", monthlyCommitment)
+                    put("startMonth", startMonth)
+                    put("startYear", startYear)
+                },
             ) {
                 filter { eq("id", personId) }
             }
@@ -154,7 +194,9 @@ class NetworkRepository {
     suspend fun updatePersonArchivedStatus(personId: String, isArchived: Boolean): Boolean {
         return try {
             supabase.from("persons").update(
-                mapOf("isArchived" to isArchived)
+                buildJsonObject {
+                    put("isArchived", isArchived)
+                }
             ) {
                 filter { eq("id", personId) }
             }
@@ -167,7 +209,9 @@ class NetworkRepository {
     suspend fun updatePersonDisplayOrder(personId: String, displayOrder: Long): Boolean {
         return try {
             supabase.from("persons").update(
-                mapOf("displayOrder" to displayOrder)
+                buildJsonObject {
+                    put("displayOrder", displayOrder)
+                }
             ) {
                 filter { eq("id", personId) }
             }
@@ -180,9 +224,14 @@ class NetworkRepository {
     fun getPersonsFlow(): Flow<List<Person>> = _personsFlow.asStateFlow()
 
     // --- Payment Operations ---
+    /**
+     * ارسال پرداخت به سرور با upsert — به همان دلیل idempotent بودن که در [addPerson] توضیح داده شد.
+     * ضمناً همین باعث می‌شود ویرایش پرداخت (SyncOperation.UPDATE) هم درست کار کند؛ قبلاً insert
+     * بود و روی رکورد موجود شکست می‌خورد.
+     */
     suspend fun addPayment(paymentRecord: PaymentRecord): Boolean {
         return try {
-            supabase.from("payments").insert(paymentRecord)
+            supabase.from("payments").upsert(paymentRecord)
             true
         } catch (e: Exception) {
             Log.e("Supabase", "addPayment error", e); false
@@ -190,33 +239,56 @@ class NetworkRepository {
     }
 
     suspend fun deletePayment(paymentId: String): Boolean {
-        return try {
-            supabase.from("payments").delete {
-                filter { eq("id", paymentId) }
+        var retries = 0
+        val maxRetries = 2
+        
+        while (retries <= maxRetries) {
+            try {
+                supabase.from("payments").delete {
+                    filter { eq("id", paymentId) }
+                }
+                Log.d("Supabase", "deletePayment Success: $paymentId")
+                return true
+            } catch (e: Exception) {
+                retries++
+                Log.e("Supabase", "deletePayment error (Attempt $retries): ${e.message}", e)
+                if (retries > maxRetries) return false
+                kotlinx.coroutines.delay(1000L * retries) // Exponential backoff-ish
             }
-            true
-        } catch (e: Exception) {
-            Log.e("Supabase", "deletePayment error", e); false
         }
+        return false
     }
 
     fun getPaymentsFlow(): Flow<List<PaymentRecord>> = _paymentsFlow.asStateFlow()
 
-    suspend fun refresh() {
-        try {
-            // دریافت و تبدیل خودکار لیست اشخاص
+    /**
+     * واکشی کامل داده‌ها از سرور.
+     *
+     * @return true فقط اگر **هر دو** واکشی موفق بوده باشند.
+     *
+     * دو تضمین مهم که فراخوان‌ها به آن تکیه می‌کنند:
+     *  ۱. در صورت شکست، flow‌ها **دست‌نخورده** می‌مانند. قبلاً خطا بلعیده می‌شد و صدازننده
+     *     نمی‌فهمید واکشی شکست خورده؛ نتیجه‌اش merge روی داده‌ی ناقص و پاک شدن داده‌ی محلی بود.
+     *  ۲. مقداردهی flow‌ها اتمیک است — یا هر دو با هم به‌روز می‌شوند یا هیچ‌کدام. قبلاً اگر
+     *     واکشی پرداخت‌ها شکست می‌خورد، لیست اشخاص جدید کنار لیست پرداخت‌های قدیمی می‌نشست.
+     */
+    suspend fun refresh(): Boolean {
+        return try {
             val persons = supabase.from("persons").select().decodeList<Person>()
-            _personsFlow.value = persons
-            
-            // دریافت و تبدیل خودکار لیست پرداخت‌ها
             val payments = supabase.from("payments").select {
                 order("timestamp", order = Order.DESCENDING)
             }.decodeList<PaymentRecord>()
+
+            // فقط بعد از موفقیت هر دو واکشی مقداردهی می‌کنیم
+            _personsFlow.value = persons
             _paymentsFlow.value = payments
-            
+            _hasServerData.value = true
+
             Log.d("Supabase", "Refresh Success: ${persons.size} persons, ${payments.size} payments")
+            true
         } catch (e: Exception) {
-            Log.e("Supabase", "refresh error", e)
+            Log.e("Supabase", "refresh error — داده‌های محلی دست‌نخورده باقی می‌مانند", e)
+            false
         }
     }
 }

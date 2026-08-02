@@ -1,6 +1,5 @@
 package com.oqba26.monthlypaymentapp.viewmodel
 
-import android.content.Context
 import com.oqba26.monthlypaymentapp.data.model.PaymentRecord
 import com.oqba26.monthlypaymentapp.data.model.Person
 
@@ -13,7 +12,10 @@ data class PersonUiModel(
     val debtCount: Int = 0,
     val totalDebtAmount: Double = 0.0,
     val phoneNumber: String? = null,
-    val unpaidMonthsNames: List<String> = emptyList()
+    val isAnonymous: Boolean = false,
+    val monthlyCommitment: Double = 0.0,
+    val unpaidMonthsNames: List<String> = emptyList(),
+    val needsSync: Boolean = false,
 )
 
 data class PersonListUiState(
@@ -55,7 +57,8 @@ enum class MonthStatus {
     AVAILABLE,
     FUTURE_MONTH,
     PAST_YEAR,
-    FUTURE_YEAR
+    FUTURE_YEAR,
+    NOT_COMMITTED
 }
 
 enum class PersonListType {
@@ -65,8 +68,23 @@ enum class PersonListType {
 
 sealed class PersonScreenEvent {
     data object RefreshData : PersonScreenEvent()
-    data class AddPerson(val name: String, val phoneNumber: String?, val context: Context) : PersonScreenEvent()
-    data class UpdatePerson(val personId: String, val name: String, val phoneNumber: String?) : PersonScreenEvent()
+    data class AddPerson(
+        val name: String,
+        val phoneNumber: String?,
+        val isAnonymous: Boolean = false,
+        val monthlyCommitment: Double = 0.0,
+        val startMonth: Int = 1,
+        val startYear: Int = 1403,
+        val initialPaymentAmount: Double = 0.0
+    ) : PersonScreenEvent()
+    data class UpdatePerson(
+        val personId: String,
+        val name: String,
+        val phoneNumber: String?,
+        val monthlyCommitment: Double = 0.0,
+        val startMonth: Int = 1,
+        val startYear: Int = 1403
+    ) : PersonScreenEvent()
     data class DeletePerson(val personId: String) : PersonScreenEvent()
     data class ArchivePerson(val personId: String) : PersonScreenEvent()
     data class RestorePerson(val personId: String) : PersonScreenEvent()
@@ -110,14 +128,13 @@ sealed class PersonScreenEvent {
         val year: Int,
         val amount: Double
     ) : PersonScreenEvent()
-    data class ExportYearlyReport(val year: Int, val context: Context) : PersonScreenEvent()
+    data class ExportYearlyReport(val year: Int) : PersonScreenEvent()
 
     data class ToggleSelection(val personId: String) : PersonScreenEvent()
     data class MoveSelected(val direction: Int, val listType: PersonListType) : PersonScreenEvent()
     data object ClearSelection : PersonScreenEvent()
 
-    data class ConfirmContactSuggestion(val personId: String, val personName: String, val phoneNumber: String) : PersonScreenEvent()
-    data class DismissContactSuggestion(val suggestion: ContactSuggestion) : PersonScreenEvent()
+    data class SetCategory(val category: String) : PersonScreenEvent()
 }
 
 data class DashboardUiModel(

@@ -28,6 +28,13 @@ interface PersonDao {
     @Query("UPDATE persons SET displayOrder = :displayOrder WHERE id = :personId")
     suspend fun updateDisplayOrder(personId: String, displayOrder: Int)
 
+    @Query("DELETE FROM persons WHERE id = :personId")
+    suspend fun deleteById(personId: String)
+
+    /** حذف گروهی — برای اعمال [com.oqba26.monthlypaymentapp.data.sync.MergePlan] در یک کوئری. */
+    @Query("DELETE FROM persons WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
+
     @Query("DELETE FROM persons")
     suspend fun deleteAll()
 }

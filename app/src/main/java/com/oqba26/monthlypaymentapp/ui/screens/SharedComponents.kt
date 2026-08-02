@@ -5,6 +5,7 @@ package com.oqba26.monthlypaymentapp.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +48,7 @@ fun EditPaymentDialog(
 ) {
     var amountText by remember { mutableStateOf(paymentRecord.amount.toLong().toString()) }
     var description by remember { mutableStateOf(paymentRecord.description ?: "") }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
@@ -125,15 +127,90 @@ fun EditPaymentDialog(
                         ) {
                             Text("لغو")
                         }
+                    }
 
-                        IconButton(
-                            onClick = onDelete,
-                        ) {
-                            Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Default.Delete,
-                                contentDescription = "حذف",
-                                tint = MaterialTheme.colorScheme.error
+                    Button(
+                        onClick = { showDeleteConfirm = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(androidx.compose.material.icons.Icons.Default.Delete, contentDescription = null)
+                        Spacer(Modifier.padding(horizontal = 4.dp))
+                        Text("حذف این پرداخت")
+                    }
+                }
+            }
+        }
+    }
+
+    if (showDeleteConfirm) {
+        ConfirmDeleteDialog(
+            title = "حذف پرداخت",
+            message = "آیا از حذف این رکورد پرداخت مطمئن هستید؟",
+            onConfirm = {
+                onDelete()
+                showDeleteConfirm = false
+            },
+            onDismiss = { showDeleteConfirm = false }
+        )
+    }
+}
+
+@Composable
+fun ConfirmDeleteDialog(
+    title: String,
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary
                             )
+                        ) {
+                            Text("لغو")
+                        }
+
+                        Button(
+                            onClick = onConfirm,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Text("حذف")
                         }
                     }
                 }
@@ -153,6 +230,7 @@ fun AddPaymentDialog(
 ) {
     var rawAmount by remember { mutableStateOf(defaultAmount.toLong().toString()) }
     var description by remember { mutableStateOf(initialDescription) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     val title =
         if (onDelete != null) "ویرایش پرداخت برای $personName" else "ثبت پرداخت برای $personName"
@@ -220,7 +298,7 @@ fun AddPaymentDialog(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (onDelete != null) {
                                 Button(
-                                    onClick = onDelete,
+                                    onClick = { showDeleteConfirm = true },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.error
                                     )
@@ -241,5 +319,17 @@ fun AddPaymentDialog(
                 }
             }
         }
+    }
+
+    if (showDeleteConfirm && onDelete != null) {
+        ConfirmDeleteDialog(
+            title = "حذف پرداخت",
+            message = "آیا از حذف این رکورد پرداخت برای $personName مطمئن هستید؟",
+            onConfirm = {
+                onDelete()
+                showDeleteConfirm = false
+            },
+            onDismiss = { showDeleteConfirm = false }
+        )
     }
 }

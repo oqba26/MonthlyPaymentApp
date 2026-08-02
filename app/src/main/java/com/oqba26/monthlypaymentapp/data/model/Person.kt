@@ -21,5 +21,18 @@ data class Person(
     
     @SerialName("createdAt") val createdAt: Long? = 0L,
 
-    @SerialName("phoneNumber") val phoneNumber: String? = ""
+    @SerialName("phoneNumber") val phoneNumber: String? = "",
+
+    @SerialName("category") val category: String = "salary",
+    
+    @SerialName("isAnonymous") val isAnonymous: Boolean = false,
+
+    @SerialName("monthlyCommitment") val monthlyCommitment: Double = 0.0,
+
+    @SerialName("startMonth") val startMonth: Int = 1,
+
+    @SerialName("startYear") val startYear: Int = 1403,
+
+    @kotlinx.serialization.Transient
+    val needsSync: Boolean = false
 )

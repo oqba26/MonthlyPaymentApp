@@ -77,58 +77,15 @@ fun ArchiveScreen(viewModel: PersonViewModel) {
 
     // دیالوگ تایید حذف قطعی
     personToDelete?.let { person ->
-        Dialog(
-            onDismissRequest = { personToDelete = null }
-        ) {
-            CompositionLocalProvider(
-                LocalLayoutDirection provides LayoutDirection.Rtl
-            ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    shape = RoundedCornerShape(24.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Text(
-                            text = "حذف قطعی شخص",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Text(
-                            text = "آیا از حذف قطعی ${person.name} و تمامی سوابق پرداخت او مطمئن هستید؟ این عمل غیرقابل بازگشت است.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Button(
-                                onClick = { personToDelete = null }
-                            ) {
-                                Text("لغو")
-                            }
-
-                            Button(
-                                onClick = {
-                                    viewModel.onEvent(PersonScreenEvent.DeletePerson(person.id))
-                                    personToDelete = null
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error
-                                )
-                            ) {
-                                Text("حذف قطعی")
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        ConfirmDeleteDialog(
+            title = "حذف قطعی شخص",
+            message = "آیا از حذف قطعی ${person.name} و تمامی سوابق پرداخت او مطمئن هستید؟ این عمل غیرقابل بازگشت است.",
+            onConfirm = {
+                viewModel.onEvent(PersonScreenEvent.DeletePerson(person.id))
+                personToDelete = null
+            },
+            onDismiss = { personToDelete = null }
+        )
     }
 
     // دیالوگ تایید بازیابی

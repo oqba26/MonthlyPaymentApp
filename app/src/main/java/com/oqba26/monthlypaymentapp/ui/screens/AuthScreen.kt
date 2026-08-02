@@ -42,6 +42,13 @@ fun AuthScreen(
     val authState by viewModel.authState.collectAsState()
     val isLoading = authState is AuthState.Loading
     var isLoginMode by remember { mutableStateOf(true) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.toastMessage.collect { message ->
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Column(
         modifier = Modifier

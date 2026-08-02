@@ -26,5 +26,10 @@ data class PaymentRecord(
     
     @SerialName("description") val description: String? = "", // ⭐️ تغییر به String? برای پذیرش مقادیر null
 
-    @SerialName("createdAt") val createdAt: Long? = null
+    @SerialName("createdAt") val createdAt: Long? = null,
+
+    @SerialName("category") val category: String = "salary",
+
+    @kotlinx.serialization.Transient
+    val needsSync: Boolean = false
 )

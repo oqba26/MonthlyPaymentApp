@@ -84,6 +84,16 @@ android {
     packaging {
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     }
+
+    // اسکیمای تولیدشده در app/schemas/ ذخیره و کامیت می‌شود.
+    // MigrationTest برای بازسازی دیتابیس نسخه‌ی قبل به همین فایل‌ها نیاز دارد.
+    sourceSets.getByName("androidTest") {
+        assets.srcDirs("$projectDir/schemas")
+    }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -143,6 +153,8 @@ dependencies {
 
     // Testing
     testImplementation(libs.test.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.androidTest.junit.ext)
     androidTestImplementation(libs.androidTest.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

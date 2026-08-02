@@ -29,12 +29,12 @@ data class ContactUiState(
     val selectedCardForBulk: String? = null,
     val showBulkSmsDialog: Boolean = false,
     val personForSmsDialog: PersonUiModel? = null,
-    val bulkSmsQueueForDialog: List<PersonUiModel> = emptyList()
+    val bulkSmsQueueForDialog: List<PersonUiModel> = emptyList(),
 )
 
 @HiltViewModel
 class ContactViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val networkRepository: NetworkRepository,
     private val settingsRepository: SettingsRepository,
     private val smsManager: SmsManager
@@ -148,7 +148,7 @@ class ContactViewModel @Inject constructor(
             val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
             
             while (cursor.moveToNext()) {
-                if (nameIndex != -1 && numberIndex != -1) {
+                if ((nameIndex != -1) && (numberIndex != -1)) {
                     val contactName = cursor.getString(nameIndex) ?: ""
                     val rawNumber = cursor.getString(numberIndex) ?: ""
                     
@@ -163,7 +163,20 @@ class ContactViewModel @Inject constructor(
 
     fun confirmContactSuggestion(personId: String, personName: String, phoneNumber: String) {
         viewModelScope.launch {
-            val statusCode = networkRepository.updatePerson(personId, personName, phoneNumber)
+            // دریافت اطلاعات فعلی شخص برای حفظ مقادیر دیگر
+            val currentPerson = networkRepository.getPersonsFlow().first().find { it.id == personId }
+            val commitment = currentPerson?.monthlyCommitment ?: 0.0
+            val startMonth = currentPerson?.startMonth ?: 1
+            val startYear = currentPerson?.startYear ?: 1403
+            
+            val statusCode = networkRepository.updatePerson(
+                personId, 
+                personName, 
+                phoneNumber, 
+                commitment,
+                startMonth,
+                startYear
+            )
             if (statusCode == 200) {
                 networkRepository.refresh()
                 _uiState.update { state ->
