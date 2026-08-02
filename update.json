@@ -1,7 +1,7 @@
 {
-  "versionCode": 1,
-  "versionName": "1.0.0",
-  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.0.0/MonthlyPaymentApp.apk",
-  "releaseNotes": "نسخه اولیه برنامه مدیریت حقوق ماهانه:\n- مدیریت لیست افراد\n- تفکیک وضعیت پرداخت\n- سیستم آپدیت خودکار\n- مدیریت دسترسی‌های اجباری",
+  "versionCode": 2,
+  "versionName": "1.0.1",
+  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.0.1/MonthlyPaymentApp-v1.0.1.apk",
+  "releaseNotes": "اصلاحات اخیر:\n- رفع تداخل در مهاجرت دیتابیس Room.\n- مرتب‌سازی تب‌ها و بهبود چیدمان.\n- شخصی‌سازی عناوین برای صفحات آرشیو، تنظیمات و مسجد.",
   "isForceUpdate": true
 }
