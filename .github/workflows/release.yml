@@ -22,7 +22,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Create Keystore
-        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > app/release-key.jks
+        run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | tr -d '\n ' | base64 --decode > app/release-key.jks
 
       - name: Build Release APK
         env:
