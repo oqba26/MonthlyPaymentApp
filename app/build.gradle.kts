@@ -23,7 +23,7 @@ android {
     }
 
     fun getProp(name: String): String? {
-        return (keystoreProperties[name] as? String) ?: System.getenv(name) ?: project.findProperty(name) as? String
+        return System.getenv(name) ?: project.findProperty(name) as? String ?: (keystoreProperties[name] as? String)
     }
 
     defaultConfig {
