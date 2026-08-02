@@ -164,14 +164,21 @@ fun MainAppHost(viewModel: PersonViewModel) {
     }
 
     LaunchedEffect(Unit) {
-        delay(2000.milliseconds)
-        updateInfo = updateManager.checkForUpdate()
-        
         val allGranted = requiredPermissions.all {
             ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
         }
         if (!allGranted) {
+            delay(2000.milliseconds)
             showPermissionsDialog = true
+        }
+    }
+
+    LaunchedEffect(authState) {
+        if (authState is AuthState.Authenticated) {
+            delay(2000.milliseconds)
+            updateInfo = updateManager.checkForUpdate()
+        } else {
+            updateInfo = null
         }
     }
 

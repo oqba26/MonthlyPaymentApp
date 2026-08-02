@@ -1,7 +1,7 @@
 {
-  "versionCode": 2,
-  "versionName": "1.0.1",
-  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.0.1/MonthlyPaymentApp-v1.0.1.apk",
-  "releaseNotes": "اصلاحات اخیر:\n- رفع تداخل در مهاجرت دیتابیس Room.\n- مرتب‌سازی تب‌ها و بهبود چیدمان.\n- شخصی‌سازی عناوین برای صفحات آرشیو، تنظیمات و مسجد.",
+  "versionCode": 3,
+  "versionName": "1.0.2",
+  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.0.2/MonthlyPaymentApp-v1.0.2.apk",
+  "releaseNotes": "به‌روزرسانی به نسخه ۱.۰.۲:\n- رفع مشکل چرخه بی‌انتهای آپدیت.\n- هماهنگ‌سازی نسخه‌های بیلد و فایل تنظیمات سرور.",
   "isForceUpdate": true
 }
