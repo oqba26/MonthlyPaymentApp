@@ -212,10 +212,17 @@ fun MainAppHost(viewModel: PersonViewModel) {
                     scope.launch {
                         updateManager.getDownloadProgress(id).collect { progress ->
                             downloadProgress = progress
-                            if (progress >= 1f) isDownloading = false
+                            if (progress >= 1f) {
+                                isDownloading = false
+                                if (!info.isForceUpdate) {
+                                    updateInfo = null
+                                }
+                            }
                         }
                     }
-                    updateInfo = null
+                    if (!info.isForceUpdate) {
+                        updateInfo = null
+                    }
                 }
             }
         )
