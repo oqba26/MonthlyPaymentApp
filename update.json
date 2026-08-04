@@ -2,6 +2,6 @@
   "versionCode": 4,
   "versionName": "1.0.3",
   "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.0.3/MonthlyPaymentApp-v1.0.3.apk",
-  "releaseNotes": "به‌روزرسانی به نسخه ۱.۰.۳:\n- بهبود سیستم پرداخت دسته جمعی و اتصال آن به نشانگر بدهی.\n- اضافه شدن قابلیت Pull-to-Refresh به صفحه لیست پرداخت شده‌ها.\n- بهینه‌سازی رابط کاربری و حذف دکمه‌های تکراری.",
+  "releaseNotes": "بهبود طراحی دیالوگ آپدیت و رفع مشکل برش خوردگی دکمه‌ها",
   "isForceUpdate": false
 }
