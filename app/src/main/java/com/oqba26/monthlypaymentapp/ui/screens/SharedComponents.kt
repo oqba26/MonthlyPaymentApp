@@ -2,26 +2,33 @@
 
 package com.oqba26.monthlypaymentapp.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,6 +44,7 @@ import com.oqba26.monthlypaymentapp.R
 import androidx.compose.ui.window.Dialog
 import com.oqba26.monthlypaymentapp.data.model.PaymentRecord
 import com.oqba26.monthlypaymentapp.utils.PersianNumberVisualTransformation
+import com.oqba26.monthlypaymentapp.utils.getPersianMonthName
 
 @Composable
 fun EditPaymentDialog(
@@ -331,5 +339,106 @@ fun AddPaymentDialog(
             },
             onDismiss = { showDeleteConfirm = false }
         )
+    }
+}
+
+@Composable
+fun BulkPaymentDialog(
+    availableMonths: List<Int>,
+    defaultAmount: Double,
+    onConfirm: (List<Int>, Double) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val selectedMonths = remember { mutableStateListOf<Int>().apply { addAll(availableMonths) } }
+    var amountText by remember { mutableStateOf(defaultAmount.toInt().toString()) }
+
+    Dialog(
+        onDismissRequest = onDismiss
+    ) {
+        CompositionLocalProvider(
+            LocalLayoutDirection provides LayoutDirection.Rtl
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "پرداخت دسته جمعی",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text("ماه‌های مورد نظر را انتخاب کنید:")
+
+                    LazyColumn(modifier = Modifier.heightIn(max = 250.dp)) {
+                        items(availableMonths) { month ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (selectedMonths.contains(month)) selectedMonths.remove(month)
+                                        else selectedMonths.add(month)
+                                    }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = selectedMonths.contains(month),
+                                    onCheckedChange = { checked ->
+                                        if (checked) selectedMonths.add(month)
+                                        else selectedMonths.remove(month)
+                                    }
+                                )
+                                Text(getPersianMonthName(month))
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = { value ->
+                            // اجازه ورود فقط به اعداد (چه انگلیسی چه فارسی)
+                            val digitsOnly = value.filter { it.isDigit() || (((it in '\u0660'..'\u0669') || (it in '\u06f0'..'\u06f9'))) }
+                            // تبدیل اعداد فارسی به انگلیسی برای ذخیره در استیت
+                            amountText = digitsOnly.map { 
+                                when (it) {
+                                    in '\u0660'..'\u0669' -> ((it.code - '\u0660'.code) + '0'.code).toChar()
+                                    in '\u06f0'..'\u06f9' -> ((it.code - '\u06f0'.code) + '0'.code).toChar()
+                                    else -> it
+                                }
+                            }.joinToString("")
+                        },
+                        label = { Text("مبلغ برای هر ماه (تومان)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        visualTransformation = PersianNumberVisualTransformation()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Button(
+                            onClick = {
+                                val finalAmount = amountText.toDoubleOrNull() ?: defaultAmount
+                                onConfirm(selectedMonths.toList(), finalAmount)
+                            },
+                            enabled = selectedMonths.isNotEmpty()
+                        ) {
+                            Text("ثبت پرداخت‌ها")
+                        }
+
+                        TextButton(onClick = onDismiss) {
+                            Text("لغو")
+                        }
+                    }
+                }
+            }
+        }
     }
 }

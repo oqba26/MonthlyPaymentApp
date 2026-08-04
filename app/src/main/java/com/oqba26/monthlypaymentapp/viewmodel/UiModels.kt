@@ -15,6 +15,7 @@ data class PersonUiModel(
     val isAnonymous: Boolean = false,
     val monthlyCommitment: Double = 0.0,
     val unpaidMonthsNames: List<String> = emptyList(),
+    val unpaidMonths: List<Int> = emptyList(),
     val needsSync: Boolean = false,
 )
 

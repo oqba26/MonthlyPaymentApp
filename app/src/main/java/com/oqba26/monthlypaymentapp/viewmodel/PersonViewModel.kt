@@ -9,6 +9,7 @@ import com.oqba26.monthlypaymentapp.data.model.Person
 import com.oqba26.monthlypaymentapp.data.repository.LocalPersonRepository
 import com.oqba26.monthlypaymentapp.data.repository.NetworkRepository
 import com.oqba26.monthlypaymentapp.data.repository.SettingsRepository
+import com.oqba26.monthlypaymentapp.utils.formatTimestampToPersianDateTime
 import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiDay
 import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiMonth
 import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiYear
@@ -188,7 +189,7 @@ class PersonViewModel @Inject constructor(
                 val uiModels = activePersons.map { person ->
                     val hasPaid = relevantPayments.any { it.personId == person.id }
                     
-                    val (debtCount, totalDebtAmount, unpaidMonths) = if (category == "mosque") {
+                    val unpaidResult = if (category == "mosque") {
                         if (person.monthlyCommitment > 0) {
                             val debtEndMonth = if (currentDay >= 20) currentMonth else currentMonth - 1
                             val debtStartMonth = if (person.startYear == currentYear) person.startMonth else 1
@@ -196,9 +197,9 @@ class PersonViewModel @Inject constructor(
                             val unpaid = (debtStartMonth..debtEndMonth).filter { m ->
                                 allPayments.none { it.personId == person.id && it.shamsiYear == currentYear && it.shamsiMonth == m && it.category == category }
                             }
-                            Triple(unpaid.size, unpaid.size * person.monthlyCommitment, unpaid.map { getPersianMonthName(it) })
+                            Triple(unpaid.size, unpaid.size * person.monthlyCommitment, unpaid.map { getPersianMonthName(it) } to unpaid)
                         } else {
-                            Triple(0, 0.0, emptyList())
+                            Triple(0, 0.0, emptyList<String>() to emptyList<Int>())
                         }
                     } else {
                         // Salary logic
@@ -209,8 +210,11 @@ class PersonViewModel @Inject constructor(
                             allPayments.none { it.personId == person.id && it.shamsiYear == currentYear && it.shamsiMonth == m && it.category == category }
                         }
                         val defaultAmount = settingsRepository.defaultPaymentAmountFlow.first()
-                        Triple(unpaid.size, unpaid.size * defaultAmount, unpaid.map { getPersianMonthName(it) })
+                        Triple(unpaid.size, unpaid.size * defaultAmount, unpaid.map { getPersianMonthName(it) } to unpaid)
                     }
+
+                    val (debtCount, totalDebtAmount, unpaidData) = unpaidResult
+                    val (unpaidMonthsNames, unpaidMonths) = unpaidData
 
                     val displayName = if (person.isAnonymous && category == "mosque") {
                         "خیر ناشناس (${person.name})"
@@ -229,7 +233,8 @@ class PersonViewModel @Inject constructor(
                         phoneNumber = person.phoneNumber,
                         isAnonymous = person.isAnonymous,
                         monthlyCommitment = person.monthlyCommitment,
-                        unpaidMonthsNames = unpaidMonths,
+                        unpaidMonthsNames = unpaidMonthsNames,
+                        unpaidMonths = unpaidMonths,
                         needsSync = person.needsSync
                     )
                 }
@@ -440,13 +445,25 @@ class PersonViewModel @Inject constructor(
                     try {
                         val person = localPersonRepository.getAllPersonsFlow().first().find { it.id == event.personId }
                         val category = person?.category ?: _currentCategory.value
+                        val currentMonth = getCurrentShamsiMonth()
+                        val currentYear = getCurrentShamsiYear()
+                        val currentDateTime = formatTimestampToPersianDateTime(System.currentTimeMillis())
+
                         event.months.forEach { month ->
+                            val monthName = getPersianMonthName(month)
+                            val isCurrentMonth = (month == currentMonth) && (event.year == currentYear)
+                            val description = if (isCurrentMonth) {
+                                "پرداخت برای ماه جاری در تاریخ $currentDateTime ثبت شد."
+                            } else {
+                                "پرداخت برای $monthName در تاریخ $currentDateTime ثبت شد."
+                            }
+
                             val record = createPaymentRecord(
                                 personId = event.personId,
                                 month = month,
                                 year = event.year,
                                 amount = event.amount,
-                                description = "پرداخت دسته جمعی"
+                                description = description
                             ).copy(category = category)
                             localPersonRepository.insertPaymentLocally(record)
                         }

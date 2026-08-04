@@ -83,6 +83,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.oqba26.monthlypaymentapp.utils.PersianDigitsTransformation
 import com.oqba26.monthlypaymentapp.utils.formatNumberAsPersian
+import com.oqba26.monthlypaymentapp.utils.formatTimestampToPersianDateTime
+import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiDay
+import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiMonth
+import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiYear
+import com.oqba26.monthlypaymentapp.utils.getPersianMonthName
 import com.oqba26.monthlypaymentapp.utils.toPersianDigits
 import com.oqba26.monthlypaymentapp.viewmodel.ContactMatch
 import com.oqba26.monthlypaymentapp.viewmodel.ContactSuggestion
@@ -129,6 +134,7 @@ fun PersonScreen(
     }
 
     var personToArchive by remember { mutableStateOf<PersonUiModel?>(null) }
+    var personForBulkPayment by remember { mutableStateOf<PersonUiModel?>(null) }
     val showBulkSelection = contactState.showBulkSmsDialog
 
     val reorderableState = rememberReorderableLazyListState(
@@ -232,6 +238,9 @@ fun PersonScreen(
                             },
                             onSmsClick = { selectedPerson ->
                                 contactViewModel.onSmsClicked(selectedPerson)
+                            },
+                            onDebtClick = { selectedPerson ->
+                                personForBulkPayment = selectedPerson
                             }
                         )
                     }
@@ -271,6 +280,9 @@ fun PersonScreen(
                             },
                             onSmsClick = { selectedPerson ->
                                 contactViewModel.onSmsClicked(selectedPerson)
+                            },
+                            onDebtClick = { selectedPerson ->
+                                personForBulkPayment = selectedPerson
                             }
                         )
                     }
@@ -289,9 +301,26 @@ fun PersonScreen(
 
     // Dialogs
     personForPaymentDialog?.let { person ->
+        val currentDay = getCurrentShamsiDay()
+        val currentMonth = getCurrentShamsiMonth()
+        val currentYear = getCurrentShamsiYear()
+        val targetMonth = if (currentDay >= 20) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1
+        val targetYear = if (currentDay < 20 && currentMonth == 1) currentYear - 1 else currentYear
+
+        val monthName = getPersianMonthName(targetMonth)
+        val currentDateTime = formatTimestampToPersianDateTime(System.currentTimeMillis())
+        
+        val isCurrentMonth = (targetMonth == currentMonth) && (targetYear == currentYear)
+        val initialDesc = if (isCurrentMonth) {
+            "پرداخت برای ماه جاری در تاریخ $currentDateTime ثبت شد."
+        } else {
+            "پرداخت برای $monthName در تاریخ $currentDateTime ثبت شد."
+        }
+
         AddPaymentDialog(
             personName = person.name,
             defaultAmount = if (person.monthlyCommitment > 0) person.monthlyCommitment else defaultPaymentAmount,
+            initialDescription = initialDesc,
             onConfirm = { amount, description ->
                 viewModel.onEvent(PersonScreenEvent.AddQuickPayment(person.id, amount, description))
                 viewModel.onDismissPaymentDialog()
@@ -345,6 +374,25 @@ fun PersonScreen(
                 personToArchive = null
             },
             onDismiss = { personToArchive = null }
+        )
+    }
+
+    personForBulkPayment?.let { person: PersonUiModel ->
+        BulkPaymentDialog(
+            availableMonths = person.unpaidMonths,
+            defaultAmount = if (person.monthlyCommitment > 0) person.monthlyCommitment else defaultPaymentAmount,
+            onConfirm = { selected: List<Int>, amount: Double ->
+                viewModel.onEvent(
+                    PersonScreenEvent.AddBulkPayments(
+                        personId = person.id,
+                        months = selected,
+                        year = getCurrentShamsiYear(),
+                        amount = amount
+                    )
+                )
+                personForBulkPayment = null
+            },
+            onDismiss = { personForBulkPayment = null }
         )
     }
 
@@ -511,8 +559,8 @@ fun AddNewPersonDialog(
     var monthlyCommitment by remember { mutableStateOf("") }
     var initialPaymentAmount by remember { mutableStateOf("") }
     
-    val currentShamsiYear = com.oqba26.monthlypaymentapp.utils.getCurrentShamsiYear()
-    val currentShamsiMonth = com.oqba26.monthlypaymentapp.utils.getCurrentShamsiMonth()
+    val currentShamsiYear = getCurrentShamsiYear()
+    val currentShamsiMonth = getCurrentShamsiMonth()
     
     var startMonth by remember { mutableIntStateOf(currentShamsiMonth) }
     var startYear by remember { mutableIntStateOf(currentShamsiYear) }
@@ -755,14 +803,14 @@ fun AddNewPersonDialog(
                                         onClick = { expandedMonth = true },
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text(com.oqba26.monthlypaymentapp.utils.getPersianMonthName(startMonth))
+                                        Text(getPersianMonthName(startMonth))
                                     }
                                     DropdownMenu(
                                         expanded = expandedMonth,
                                         onDismissRequest = { expandedMonth = false }) {
                                         (1..12).forEach { m ->
                                             DropdownMenuItem(
-                                                text = { Text(com.oqba26.monthlypaymentapp.utils.getPersianMonthName(m)) },
+                                                text = { Text(getPersianMonthName(m)) },
                                                 onClick = { startMonth = m; expandedMonth = false }
                                             )
                                         }
@@ -1058,7 +1106,8 @@ fun PersonListItem(
     onLongClick: () -> Unit = {},
     onQuickPayClick: (PersonUiModel) -> Unit,
     onArchiveClick: (PersonUiModel) -> Unit,
-    onSmsClick: (PersonUiModel) -> Unit
+    onSmsClick: (PersonUiModel) -> Unit,
+    onDebtClick: (PersonUiModel) -> Unit
 ) {
     Card(
         modifier = modifier
@@ -1107,7 +1156,8 @@ fun PersonListItem(
             if (person.debtCount > 0) {
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer,
-                    shape = MaterialTheme.shapes.small
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.clickable { onDebtClick(person) }
                 ) {
                     Text(
                         text = "${person.debtCount.toString().toPersianDigits()} بدهی",

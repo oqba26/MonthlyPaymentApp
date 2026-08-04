@@ -4,13 +4,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -45,6 +50,7 @@ import org.burnoutcrew.reorderable.detectReorderAfterLongPress
 import org.burnoutcrew.reorderable.rememberReorderableLazyListState
 import org.burnoutcrew.reorderable.reorderable
 
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun PaidListScreen(
     viewModel: PersonViewModel,
@@ -53,8 +59,11 @@ fun PaidListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
+    val defaultPaymentAmount by viewModel.defaultPaymentAmountFlow.collectAsState(initial = 0.0)
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     val personToArchive = remember { mutableStateOf<PersonUiModel?>(null) }
+    val personForBulkPayment = remember { mutableStateOf<PersonUiModel?>(null) }
 
     val state = rememberReorderableLazyListState(
         onMove = { from, to ->
@@ -69,40 +78,79 @@ fun PaidListScreen(
         }
     )
 
-    Scaffold { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding)) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.onSearchQueryChange(it) },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                label = { Text("جستجوی نام...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
-                singleLine = true
-            )
+    @OptIn(ExperimentalMaterialApi::class)
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isRefreshing,
+        onRefresh = { viewModel.onEvent(PersonScreenEvent.RefreshData) }
+    )
 
-            LazyColumn(
-                state = state.listState,
-                modifier = Modifier.reorderable(state)
-            ) {
-                itemsIndexed(uiState.paidPersons, key = { _, person -> person.id }) { index, person ->
-                    ReorderableItem(state, key = person.id) { _ ->
-                        val rowDragModifier = if (searchQuery.isBlank()) Modifier.detectReorderAfterLongPress(state) else Modifier
-                        Row(modifier = rowDragModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                PersonListItem(
-                                    person = person,
-                                    index = index + 1,
-                                    onPersonClick = { navController.navigate("person_detail/${person.id}") },
-                                    onQuickPayClick = { },
-                                    onArchiveClick = { personToArchive.value = it },
-                                    onSmsClick = { contactViewModel.sendSmsReminder(it) }
-                                )
+    Scaffold { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .pullRefresh(pullRefreshState)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.onSearchQueryChange(it) },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    label = { Text("جستجوی نام...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                    singleLine = true
+                )
+
+                LazyColumn(
+                    state = state.listState,
+                    modifier = Modifier.reorderable(state)
+                ) {
+                    itemsIndexed(uiState.paidPersons, key = { _, person -> person.id }) { index, person ->
+                        ReorderableItem(state, key = person.id) { _ ->
+                            val rowDragModifier = if (searchQuery.isBlank()) Modifier.detectReorderAfterLongPress(state) else Modifier
+                            Row(modifier = rowDragModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    PersonListItem(
+                                        person = person,
+                                        index = index + 1,
+                                        onPersonClick = { navController.navigate("person_detail/${person.id}") },
+                                        onQuickPayClick = { },
+                                        onArchiveClick = { personToArchive.value = it },
+                                        onSmsClick = { contactViewModel.sendSmsReminder(it) },
+                                        onDebtClick = { personForBulkPayment.value = it }
+                                    )
+                                }
                             }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                         }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                     }
                 }
             }
+
+            PullRefreshIndicator(
+                refreshing = isRefreshing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        }
+
+        personForBulkPayment.value?.let { person: PersonUiModel ->
+            BulkPaymentDialog(
+                availableMonths = person.unpaidMonths,
+                defaultAmount = if (person.monthlyCommitment > 0) person.monthlyCommitment else defaultPaymentAmount,
+                onConfirm = { selected: List<Int>, amount: Double ->
+                    viewModel.onEvent(
+                        PersonScreenEvent.AddBulkPayments(
+                            personId = person.id,
+                            months = selected,
+                            year = com.oqba26.monthlypaymentapp.utils.getCurrentShamsiYear(),
+                            amount = amount
+                        )
+                    )
+                    personForBulkPayment.value = null
+                },
+                onDismiss = { personForBulkPayment.value = null }
+            )
         }
 
         personToArchive.value?.let { person ->

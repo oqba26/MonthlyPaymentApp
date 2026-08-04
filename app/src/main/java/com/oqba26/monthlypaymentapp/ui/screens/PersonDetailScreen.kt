@@ -26,7 +26,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -51,7 +50,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -102,7 +100,6 @@ fun PersonDetailScreen(
     var editingPayment by remember { mutableStateOf<PaymentRecord?>(null) }
     var addingPaymentMonth by remember { mutableStateOf<Int?>(null) }
     var editingPerson by remember { mutableStateOf(value = false) }
-    var showBulkPaymentDialog by remember { mutableStateOf(value = false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         val displayName = detailState.person?.let { p ->
@@ -123,24 +120,6 @@ fun PersonDetailScreen(
                 year = detailState.selectedYear,
             ) { offset ->
                 viewModel.onEvent(PersonScreenEvent.ChangeYear(offset))
-            }
-
-            val availableMonths = detailState.monthStates
-                .asSequence()
-                .filter { it.status == MonthStatus.AVAILABLE }
-                .map { it.month }
-                .toList()
-
-            if (availableMonths.isNotEmpty()) {
-                Button(
-                    onClick = { showBulkPaymentDialog = true },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
-                ) {
-                    Icon(Icons.Default.Payments, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("پرداخت دسته جمعی (${availableMonths.size.toString().toPersianDigits()} ماه)")
-                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -239,135 +218,6 @@ fun PersonDetailScreen(
                 contactViewModel.findSimilarContacts(name)
             }
         )
-    }
-
-    if (showBulkPaymentDialog) {
-        val availableMonths = detailState.monthStates
-            .asSequence()
-            .filter { it.status == MonthStatus.AVAILABLE }
-            .map { it.month }
-            .toList()
-        
-        val bulkDefaultAmount = if ((detailState.person?.monthlyCommitment ?: 0.0) > 0)
-            detailState.person!!.monthlyCommitment
-        else defaultPaymentAmount
-
-        BulkPaymentDialog(
-            availableMonths = availableMonths,
-            defaultAmount = bulkDefaultAmount,
-            onConfirm = { selected, amount ->
-                viewModel.onEvent(
-                    PersonScreenEvent.AddBulkPayments(
-                        personId = personId,
-                        months = selected,
-                        year = detailState.selectedYear,
-                        amount = amount
-                    )
-                )
-                showBulkPaymentDialog = false
-            },
-        ) { showBulkPaymentDialog = false }
-    }
-}
-
-@Composable
-fun BulkPaymentDialog(
-    availableMonths: List<Int>,
-    defaultAmount: Double,
-    onConfirm: (List<Int>, Double) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val selectedMonths = remember { mutableStateListOf<Int>().apply { addAll(availableMonths) } }
-    var amountText by remember { mutableStateOf(defaultAmount.toInt().toString()) }
-
-    Dialog(
-        onDismissRequest = onDismiss
-    ) {
-        CompositionLocalProvider(
-            LocalLayoutDirection provides LayoutDirection.Rtl
-        ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "پرداخت دسته جمعی",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text("ماه‌های مورد نظر را انتخاب کنید:")
-
-                    LazyColumn(modifier = Modifier.heightIn(max = 250.dp)) {
-                        items(availableMonths) { month ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        if (selectedMonths.contains(month)) selectedMonths.remove(month)
-                                        else selectedMonths.add(month)
-                                    }
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = selectedMonths.contains(month),
-                                    onCheckedChange = { checked ->
-                                        if (checked) selectedMonths.add(month)
-                                        else selectedMonths.remove(month)
-                                    }
-                                )
-                                Text(getPersianMonthName(month))
-                            }
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = amountText,
-                        onValueChange = { value ->
-                            // اجازه ورود فقط به اعداد (چه انگلیسی چه فارسی)
-                            val digitsOnly = value.filter { it.isDigit() || (((it in '\u0660'..'\u0669') || (it in '\u06f0'..'\u06f9'))) }
-                            // تبدیل اعداد فارسی به انگلیسی برای ذخیره در استیت
-                            amountText = digitsOnly.map { 
-                                when (it) {
-                                    in '\u0660'..'\u0669' -> ((it.code - '\u0660'.code) + '0'.code).toChar()
-                                    in '\u06f0'..'\u06f9' -> ((it.code - '\u06f0'.code) + '0'.code).toChar()
-                                    else -> it
-                                }
-                            }.joinToString("")
-                        },
-                        label = { Text("مبلغ برای هر ماه (تومان)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        visualTransformation = PersianNumberVisualTransformation()
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Button(
-                            onClick = {
-                                val finalAmount = amountText.toDoubleOrNull() ?: defaultAmount
-                                onConfirm(selectedMonths.toList(), finalAmount)
-                            },
-                            enabled = selectedMonths.isNotEmpty()
-                        ) {
-                            Text("ثبت پرداخت‌ها")
-                        }
-
-                        TextButton(onClick = onDismiss) {
-                            Text("لغو")
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
