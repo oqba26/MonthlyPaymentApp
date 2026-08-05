@@ -1,7 +1,7 @@
 {
-  "versionCode": 6,
-  "versionName": "1.0.5",
+  "versionCode": 7,
+  "versionName": "1.0.6",
   "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.0.5/MonthlyPaymentApp-v1.0.5.apk",
-  "releaseNotes": "اصلاح چیدمان دکمه‌های دیالوگ آپدیت و تغییر متن دکمه تایید",
+  "releaseNotes": "تست ظاهری دیالوگ جدید (نسخه ۱.۰.۵)",
   "isForceUpdate": false
 }
