@@ -92,6 +92,15 @@ fun UpdateDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        Button(
+                            onClick = onConfirm,
+                            modifier = Modifier.weight(1f),
+                            shape = MaterialTheme.shapes.medium,
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                        ) {
+                            Text("بروزرسانی")
+                        }
+
                         if (!updateInfo.isForceUpdate) {
                             OutlinedButton(
                                 onClick = onDismiss,
@@ -102,15 +111,6 @@ fun UpdateDialog(
                             ) {
                                 Text("بعداً")
                             }
-                        }
-
-                        Button(
-                            onClick = onConfirm,
-                            modifier = Modifier.weight(1f),
-                            shape = MaterialTheme.shapes.medium,
-                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
-                        ) {
-                            Text("تایید و بروزرسانی")
                         }
                     }
                 }

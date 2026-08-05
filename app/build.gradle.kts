@@ -30,8 +30,8 @@ android {
         applicationId = "com.oqba26.monthlypaymentapp"
         minSdk = 25
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 6
+        versionName = "1.0.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
