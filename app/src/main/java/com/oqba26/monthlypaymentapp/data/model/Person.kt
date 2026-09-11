@@ -1,11 +1,13 @@
-@file:OptIn(kotlinx.serialization.InternalSerializationApi::class)
+@file:OptIn(InternalSerializationApi::class)
 
 package com.oqba26.monthlypaymentapp.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 @Serializable
 @Entity(tableName = "persons")
@@ -15,24 +17,24 @@ data class Person(
     
     @SerialName("name") val name: String,
     
-    @SerialName("isArchived") val isArchived: Boolean = false,
+    @SerialName("is_archived") val isArchived: Boolean = false,
     
-    @SerialName("displayOrder") val displayOrder: Long? = 0L,
+    @SerialName("display_order") val displayOrder: Long? = 0L,
     
-    @SerialName("createdAt") val createdAt: Long? = 0L,
+    @SerialName("created_at") val createdAt: Long? = 0L,
 
-    @SerialName("phoneNumber") val phoneNumber: String? = "",
+    @SerialName("phone_number") val phoneNumber: String? = "",
 
     @SerialName("category") val category: String = "salary",
     
-    @SerialName("isAnonymous") val isAnonymous: Boolean = false,
+    @SerialName("is_anonymous") val isAnonymous: Boolean = false,
 
-    @SerialName("monthlyCommitment") val monthlyCommitment: Double = 0.0,
+    @SerialName("monthly_commitment") val monthlyCommitment: Double = 0.0,
 
-    @SerialName("startMonth") val startMonth: Int = 1,
+    @SerialName("start_month") val startMonth: Int = 1,
 
-    @SerialName("startYear") val startYear: Int = 1403,
+    @SerialName("start_year") val startYear: Int = 1403,
 
-    @kotlinx.serialization.Transient
+    @Transient
     val needsSync: Boolean = false
 )
