@@ -490,7 +490,7 @@ fun AuthenticatedContent(viewModel: PersonViewModel, contactViewModel: ContactVi
                 )
             }
             composable(Screen.Archive.route) {
-                ArchiveScreen(viewModel)
+                ArchiveScreen(viewModel = viewModel, navController = navController)
             }
             composable(Screen.Settings.route) {
                 val authViewModel: AuthViewModel = hiltViewModel()

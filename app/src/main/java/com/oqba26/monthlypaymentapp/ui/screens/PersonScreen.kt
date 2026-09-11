@@ -201,10 +201,10 @@ fun PersonScreen(
                 if (currentCategory == "mosque" && uiState.unpaidPersons.isNotEmpty()) {
                     item {
                         Text(
-                            text = "لیست خیرین (بدهکار)",
+                            text = "لیست خیرین",
                             modifier = Modifier.padding(16.dp),
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.error
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -303,14 +303,12 @@ fun PersonScreen(
     personForPaymentDialog?.let { person ->
         val currentDay = getCurrentShamsiDay()
         val currentMonth = getCurrentShamsiMonth()
-        val currentYear = getCurrentShamsiYear()
         val targetMonth = if (currentDay >= 20) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1
-        val targetYear = if (currentDay < 20 && currentMonth == 1) currentYear - 1 else currentYear
 
         val monthName = getPersianMonthName(targetMonth)
         val currentDateTime = formatTimestampToPersianDateTime(System.currentTimeMillis())
         
-        val isCurrentMonth = (targetMonth == currentMonth) && (targetYear == currentYear)
+        val isCurrentMonth = targetMonth == currentMonth
         val initialDesc = if (isCurrentMonth) {
             "پرداخت برای ماه جاری در تاریخ $currentDateTime ثبت شد."
         } else {

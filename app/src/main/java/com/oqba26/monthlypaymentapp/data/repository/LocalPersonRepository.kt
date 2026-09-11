@@ -135,6 +135,7 @@ class LocalPersonRepository(
     suspend fun deletePersonLocally(personId: String) {
         database.withTransaction {
             personDao.deleteById(personId)
+            paymentDao.deletePaymentsForPerson(personId)
             syncQueueDao.insert(SyncQueue(entityId = personId, type = SyncType.PERSON, operation = SyncOperation.DELETE))
         }
     }

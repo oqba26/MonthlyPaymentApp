@@ -1,5 +1,6 @@
 package com.oqba26.monthlypaymentapp.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,12 +39,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.navigation.NavController
 import com.oqba26.monthlypaymentapp.viewmodel.PersonScreenEvent
 import com.oqba26.monthlypaymentapp.viewmodel.PersonUiModel
 import com.oqba26.monthlypaymentapp.viewmodel.PersonViewModel
 
 @Composable
-fun ArchiveScreen(viewModel: PersonViewModel) {
+fun ArchiveScreen(viewModel: PersonViewModel, navController: NavController) {
     val uiState by viewModel.uiState.collectAsState()
     var personToDelete by remember { mutableStateOf<PersonUiModel?>(null) }
     var personToRestore by remember { mutableStateOf<PersonUiModel?>(null) }
@@ -63,6 +65,9 @@ fun ArchiveScreen(viewModel: PersonViewModel) {
             items(uiState.archivedPersons, key = { it.id }) { person ->
                 ArchivedPersonListItem(
                     person = person,
+                    onPersonClick = {
+                        navController.navigate("person_detail/${person.id}")
+                    },
                     onRestore = {
                         personToRestore = person
                     },
@@ -148,12 +153,14 @@ fun ArchiveScreen(viewModel: PersonViewModel) {
 @Composable
 fun ArchivedPersonListItem(
     person: PersonUiModel,
+    onPersonClick: () -> Unit,
     onRestore: () -> Unit,
     onDelete: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onPersonClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween

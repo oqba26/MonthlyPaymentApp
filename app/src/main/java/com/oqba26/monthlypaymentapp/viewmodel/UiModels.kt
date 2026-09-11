@@ -84,7 +84,8 @@ sealed class PersonScreenEvent {
         val phoneNumber: String?,
         val monthlyCommitment: Double = 0.0,
         val startMonth: Int = 1,
-        val startYear: Int = 1403
+        val startYear: Int = 1403,
+        val isAnonymous: Boolean = false
     ) : PersonScreenEvent()
     data class DeletePerson(val personId: String) : PersonScreenEvent()
     data class ArchivePerson(val personId: String) : PersonScreenEvent()

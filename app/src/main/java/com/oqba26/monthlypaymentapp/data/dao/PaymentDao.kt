@@ -25,6 +25,9 @@ interface PaymentDao {
     @Query("DELETE FROM payments WHERE id = :paymentId")
     suspend fun deleteById(paymentId: String)
 
+    @Query("DELETE FROM payments WHERE personId = :personId")
+    suspend fun deletePaymentsForPerson(personId: String)
+
     /** حذف گروهی — برای اعمال [com.oqba26.monthlypaymentapp.data.sync.MergePlan] در یک کوئری. */
     @Query("DELETE FROM payments WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)

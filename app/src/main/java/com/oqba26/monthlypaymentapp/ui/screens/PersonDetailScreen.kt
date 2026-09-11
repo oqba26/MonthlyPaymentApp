@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -43,7 +44,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -128,7 +128,6 @@ fun PersonDetailScreen(
                 items(detailState.monthStates) { monthModel ->
                     MonthListItem(
                         month = monthModel,
-                        personName = detailState.person?.name ?: "",
                         startMonth = detailState.person?.startMonth ?: 1,
                         onHeaderClick = {
                             expandedMonth = if (expandedMonth == monthModel.month) null else monthModel.month
@@ -207,11 +206,17 @@ fun PersonDetailScreen(
             initialPhone = detailState.person?.phoneNumber,
             initialCommitment = detailState.person?.monthlyCommitment ?: 0.0,
             initialStartMonth = detailState.person?.startMonth ?: 1,
-            initialStartYear = detailState.person?.startYear ?: com.oqba26.monthlypaymentapp.utils.getCurrentShamsiYear(),
+            initialStartYear = detailState.person?.startYear ?: getCurrentShamsiYear(),
+            initialIsAnonymous = detailState.person?.isAnonymous ?: false,
             isMosqueCategory = currentCategory == "mosque",
-            onConfirm = { name, phone, commitment, month, year ->
-                viewModel.onEvent(PersonScreenEvent.UpdatePerson(personId, name, phone, commitment, month, year))
+            onConfirm = { name, phone, commitment, month, year, isAnon ->
+                viewModel.onEvent(PersonScreenEvent.UpdatePerson(personId, name, phone, commitment, month, year, isAnon))
                 editingPerson = false
+            },
+            onDelete = {
+                viewModel.onEvent(PersonScreenEvent.DeletePerson(personId))
+                editingPerson = false
+                navController.popBackStack()
             },
             onDismiss = { editingPerson = false },
             onSearchContact = { name ->
@@ -256,16 +261,20 @@ fun UpdatePersonDialog(
     initialCommitment: Double = 0.0,
     initialStartMonth: Int = 1,
     initialStartYear: Int = 1403,
+    initialIsAnonymous: Boolean = false,
     isMosqueCategory: Boolean = false,
-    onConfirm: (String, String, Double, Int, Int) -> Unit,
+    onConfirm: (String, String, Double, Int, Int, Boolean) -> Unit,
+    onDelete: () -> Unit,
     onDismiss: () -> Unit,
     onSearchContact: (String) -> List<ContactMatch>,
 ) {
     var name by remember { mutableStateOf(initialName) }
     var phoneNumber by remember { mutableStateOf(initialPhone ?: "") }
     var monthlyCommitment by remember { mutableStateOf(if (initialCommitment > 0) initialCommitment.toInt().toString() else "") }
+    var isAnonymous by remember { mutableStateOf(initialIsAnonymous) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     
-    val currentShamsiYear = com.oqba26.monthlypaymentapp.utils.getCurrentShamsiYear()
+    val currentShamsiYear = getCurrentShamsiYear()
     var startMonth by remember { mutableIntStateOf(initialStartMonth) }
     var startYear by remember { mutableIntStateOf(initialStartYear) }
     
@@ -306,6 +315,20 @@ fun UpdatePersonDialog(
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isAnonymous = !isAnonymous },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = isAnonymous,
+                            onCheckedChange = { isAnonymous = it }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("ثبت به صورت خیر ناشناس")
+                    }
 
                     OutlinedTextField(
                         value = name,
@@ -458,12 +481,12 @@ fun UpdatePersonDialog(
                                     onClick = { expandedMonth = true },
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(com.oqba26.monthlypaymentapp.utils.getPersianMonthName(startMonth))
+                                    Text(getPersianMonthName(startMonth))
                                 }
                                 DropdownMenu(expanded = expandedMonth, onDismissRequest = { expandedMonth = false }) {
                                     (1..12).forEach { m ->
                                         DropdownMenuItem(
-                                            text = { Text(com.oqba26.monthlypaymentapp.utils.getPersianMonthName(m)) },
+                                            text = { Text(getPersianMonthName(m)) },
                                             onClick = { startMonth = m; expandedMonth = false }
                                         )
                                     }
@@ -481,7 +504,7 @@ fun UpdatePersonDialog(
                             onClick = {
                                 if (name.isNotBlank()) {
                                     val commitment = monthlyCommitment.toDoubleOrNull() ?: 0.0
-                                    onConfirm(name, phoneNumber, commitment, startMonth, startYear)
+                                    onConfirm(name, phoneNumber, commitment, startMonth, startYear, isAnonymous)
                                 }
                             },
                             enabled = name.isNotBlank()
@@ -496,6 +519,47 @@ fun UpdatePersonDialog(
                             )
                         ) {
                             Text("لغو")
+                        }
+                    }
+
+                    Button(
+                        onClick = { showDeleteConfirm = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Spacer(Modifier.width(4.dp))
+                        Text("حذف این شخص")
+                    }
+
+                    if (showDeleteConfirm) {
+                        Dialog(onDismissRequest = { showDeleteConfirm = false }) {
+                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(24.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                        Text(text = "حذف شخص", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                                        Text(text = "آیا از حذف این شخص و تمام پرداخت‌های او مطمئن هستید؟", style = MaterialTheme.typography.bodyMedium)
+                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                            Button(onClick = { showDeleteConfirm = false }) { Text("لغو") }
+                                            Button(
+                                                onClick = {
+                                                    showDeleteConfirm = false
+                                                    onDelete()
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                                            ) {
+                                                Text("حذف")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -535,7 +599,6 @@ fun YearSelector(year: Int, onYearChange: (Int) -> Unit) {
 @Composable
 fun MonthListItem(
     month: MonthUiModel,
-    personName: String,
     startMonth: Int,
     onHeaderClick: () -> Unit,
     onEditClick: () -> Unit

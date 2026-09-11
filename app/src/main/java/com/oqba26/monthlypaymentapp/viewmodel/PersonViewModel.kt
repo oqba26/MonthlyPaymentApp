@@ -189,18 +189,8 @@ class PersonViewModel @Inject constructor(
                 val uiModels = activePersons.map { person ->
                     val hasPaid = relevantPayments.any { it.personId == person.id }
                     
-                    val unpaidResult = if (category == "mosque") {
-                        if (person.monthlyCommitment > 0) {
-                            val debtEndMonth = if (currentDay >= 20) currentMonth else currentMonth - 1
-                            val debtStartMonth = if (person.startYear == currentYear) person.startMonth else 1
-                            
-                            val unpaid = (debtStartMonth..debtEndMonth).filter { m ->
-                                allPayments.none { it.personId == person.id && it.shamsiYear == currentYear && it.shamsiMonth == m && it.category == category }
-                            }
-                            Triple(unpaid.size, unpaid.size * person.monthlyCommitment, unpaid.map { getPersianMonthName(it) } to unpaid)
-                        } else {
-                            Triple(0, 0.0, emptyList<String>() to emptyList<Int>())
-                        }
+                    val unpaidResult = if (category == "mosque" || person.isAnonymous) {
+                        Triple(0, 0.0, emptyList<String>() to emptyList())
                     } else {
                         // Salary logic
                         val debtEndMonth = if (currentDay >= 20) currentMonth else currentMonth - 1
@@ -374,7 +364,8 @@ class PersonViewModel @Inject constructor(
 
                 is PersonScreenEvent.UpdatePerson -> {
                     val persons = localPersonRepository.getAllPersonsFlow().first()
-                    val isDuplicate = persons.any { it.id != event.personId && it.category == _currentCategory.value && it.name.trim().equals(event.name.trim(), ignoreCase = true) }
+                    val finalName = if (event.isAnonymous && event.name.isBlank()) "ناشناس" else event.name
+                    val isDuplicate = !event.isAnonymous && persons.any { it.id != event.personId && it.category == _currentCategory.value && it.name.trim().equals(finalName.trim(), ignoreCase = true) }
                     
                     if (isDuplicate) {
                         _toastMessage.emit("خطا: این نام از قبل وجود دارد.")
@@ -382,13 +373,15 @@ class PersonViewModel @Inject constructor(
                         val currentPerson = persons.find { it.id == event.personId }
                         if (currentPerson != null) {
                             val updatedPerson = currentPerson.copy(
-                                name = event.name,
+                                name = finalName,
                                 phoneNumber = event.phoneNumber,
-                                monthlyCommitment = event.monthlyCommitment,
+                                monthlyCommitment = if (event.isAnonymous) 0.0 else event.monthlyCommitment,
                                 startMonth = event.startMonth,
-                                startYear = event.startYear
+                                startYear = event.startYear,
+                                isAnonymous = event.isAnonymous
                             )
                             localPersonRepository.updatePersonLocally(updatedPerson)
+                            _toastMessage.emit("اطلاعات شخص با موفقیت بروز شد.")
                         }
                     }
                 }
