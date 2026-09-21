@@ -1,10 +1,13 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 package com.oqba26.monthlypaymentapp
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
+import androidx.core.net.toUri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -96,6 +99,7 @@ import com.oqba26.monthlypaymentapp.ui.screens.PersonDetailScreen
 import com.oqba26.monthlypaymentapp.ui.screens.PersonScreen
 import com.oqba26.monthlypaymentapp.ui.screens.SettingsScreen
 import com.oqba26.monthlypaymentapp.ui.theme.MonthlyPaymentManagement2Theme
+import com.oqba26.monthlypaymentapp.utils.DownloadState
 import com.oqba26.monthlypaymentapp.utils.UpdateInfo
 import com.oqba26.monthlypaymentapp.utils.UpdateManager
 import com.oqba26.monthlypaymentapp.viewmodel.ContactViewModel
@@ -213,22 +217,39 @@ fun MainAppHost(viewModel: PersonViewModel) {
             updateInfo = info,
             onDismiss = { updateInfo = null },
             onConfirm = {
-                val id = updateManager.downloadAndInstall(info.url, "MonthlyPaymentApp_v${info.versionName}.apk")
-                if (id != -1L) {
-                    isDownloading = true
-                    scope.launch {
-                        updateManager.getDownloadProgress(id).collect { progress ->
-                            downloadProgress = progress
-                            if (progress >= 1f) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
+                    Toast.makeText(context, "لطفاً اجازه نصب برنامه‌های ناشناخته را بدهید", Toast.LENGTH_LONG).show()
+                    val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                        data = "package:${context.packageName}".toUri()
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                    return@UpdateDialog
+                }
+
+                isDownloading = true
+                downloadProgress = 0f
+                if (!info.isForceUpdate) {
+                    updateInfo = null
+                }
+
+                scope.launch {
+                    val fileName = "MonthlyPaymentApp_v${info.versionName}.apk"
+                    updateManager.downloadApk(info.url, fileName).collect { state ->
+                        when (state) {
+                            is DownloadState.Progress -> {
+                                downloadProgress = state.progress
+                            }
+                            is DownloadState.Success -> {
                                 isDownloading = false
-                                if (!info.isForceUpdate) {
-                                    updateInfo = null
-                                }
+                                updateManager.installApk(state.file)
+                            }
+                            is DownloadState.Error -> {
+                                isDownloading = false
+                                Toast.makeText(context, "خطا در دانلود: ${state.message}", Toast.LENGTH_LONG).show()
+                                updateManager.openInBrowser(info.url)
                             }
                         }
-                    }
-                    if (!info.isForceUpdate) {
-                        updateInfo = null
                     }
                 }
             }
@@ -252,15 +273,23 @@ fun MainAppHost(viewModel: PersonViewModel) {
                             style = MaterialTheme.typography.titleLarge,
                             modifier = Modifier.padding(bottom = 16.dp)
                         )
-                        LinearProgressIndicator(
-                            progress = { downloadProgress },
-                            modifier = Modifier.fillMaxWidth().height(8.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                        )
+                        if (downloadProgress > 0f) {
+                            LinearProgressIndicator(
+                                progress = { downloadProgress },
+                                modifier = Modifier.fillMaxWidth().height(8.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth().height(8.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            )
+                        }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "${(downloadProgress * 100).toInt()}%",
+                            text = if (downloadProgress > 0f) "${(downloadProgress * 100).toInt()}%" else "در حال اتصال...",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }

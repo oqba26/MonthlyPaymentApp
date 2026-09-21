@@ -1,34 +1,31 @@
-@file:OptIn(kotlinx.serialization.InternalSerializationApi::class)
+@file:OptIn(InternalSerializationApi::class)
 package com.oqba26.monthlypaymentapp.utils
 
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Environment
 import android.widget.Toast
-import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import io.ktor.client.*
-import io.ktor.client.statement.bodyAsText
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
+import io.ktor.utils.io.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
-import kotlin.time.Duration.Companion.milliseconds
 
 @Serializable
 data class UpdateInfo(
@@ -38,6 +35,12 @@ data class UpdateInfo(
     val releaseNotes: String,
     val isForceUpdate: Boolean = false,
 )
+
+sealed class DownloadState {
+    data class Progress(val progress: Float) : DownloadState()
+    data class Success(val file: File) : DownloadState()
+    data class Error(val message: String) : DownloadState()
+}
 
 class UpdateManager(private val context: Context) {
 
@@ -60,10 +63,10 @@ class UpdateManager(private val context: Context) {
         try {
             val timestamp = System.currentTimeMillis()
             val urlWithParams = if (updateUrl.contains("?")) "$updateUrl&t=$timestamp" else "$updateUrl?t=$timestamp"
-            
+
             val responseText: String = client.get(urlWithParams).bodyAsText()
             val updateInfo: UpdateInfo = json.decodeFromString(responseText)
-            
+
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
             val currentVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 pInfo.longVersionCode.toInt()
@@ -81,95 +84,58 @@ class UpdateManager(private val context: Context) {
         null
     }
 
-    fun downloadAndInstall(url: String, fileName: String): Long {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (!context.packageManager.canRequestPackageInstalls()) {
-                Toast.makeText(context, "لطفاً اجازه نصب برنامه‌های ناشناخته را بدهید", Toast.LENGTH_LONG).show()
-                val intent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                    data = "package:${context.packageName}".toUri()
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                context.startActivity(intent)
-                return -1L
+    fun downloadApk(url: String, fileName: String): Flow<DownloadState> = flow {
+        try {
+            val destinationFile = File(
+                context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+                fileName
+            )
+            if (destinationFile.exists()) {
+                destinationFile.delete()
             }
-        }
 
-        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        val uri = url.toUri()
-        
-        val oldFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
-        if (oldFile.exists()) oldFile.delete()
+            client.prepareGet(url) {
+                header(HttpHeaders.UserAgent, "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+            }.execute { response ->
+                if (!response.status.isSuccess()) {
+                    emit(DownloadState.Error("خطا در دانلود فایل (کد ${response.status.value})"))
+                    return@execute
+                }
 
-        val request = DownloadManager.Request(uri)
-            .setTitle("دریافت به‌روزرسانی")
-            .setDescription("نسخه جدید در حال دانلود است...")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, fileName)
-            .setAllowedOverMetered(true)
-            .setAllowedOverRoaming(true)
+                val channel: ByteReadChannel = response.bodyAsChannel()
+                val contentLength = response.contentLength() ?: -1L
 
-        val downloadId = downloadManager.enqueue(request)
+                destinationFile.outputStream().use { output ->
+                    val buffer = ByteArray(16384)
+                    var bytesCopied = 0L
+                    while (!channel.isClosedForRead) {
+                        val read = channel.readAvailable(buffer, 0, buffer.size)
+                        if (read <= 0) break
+                        output.write(buffer, 0, read)
+                        bytesCopied += read
 
-        val onComplete = object : BroadcastReceiver() {
-            override fun onReceive(receiverContext: Context, intent: Intent) {
-                val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
-                if (id == downloadId) {
-                    installApk(fileName)
-                    try {
-                        receiverContext.unregisterReceiver(this)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                        if (contentLength > 0) {
+                            val progress = bytesCopied.toFloat() / contentLength.toFloat()
+                            emit(DownloadState.Progress(progress.coerceIn(0f, 1f)))
+                        } else {
+                            emit(DownloadState.Progress(0f))
+                        }
                     }
                 }
+                emit(DownloadState.Progress(1f))
+                emit(DownloadState.Success(destinationFile))
             }
-        }
-        
-        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-        ContextCompat.registerReceiver(context, onComplete, filter, ContextCompat.RECEIVER_EXPORTED)
-        
-        return downloadId
-    }
-
-    fun getDownloadProgress(downloadId: Long): Flow<Float> = flow {
-        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        var isDownloading = true
-        while (isDownloading) {
-            val query = DownloadManager.Query().setFilterById(downloadId)
-            val cursor = downloadManager.query(query)
-            if (cursor != null && cursor.moveToFirst()) {
-                val bytesDownloadedIndex = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
-                val bytesTotalIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
-                val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-
-                if (bytesDownloadedIndex != -1 && bytesTotalIndex != -1 && statusIndex != -1) {
-                    val bytesDownloaded = cursor.getInt(bytesDownloadedIndex)
-                    val bytesTotal = cursor.getInt(bytesTotalIndex)
-                    val status = cursor.getInt(statusIndex)
-
-                    if (status == DownloadManager.STATUS_SUCCESSFUL || status == DownloadManager.STATUS_FAILED) {
-                        isDownloading = false
-                    }
-
-                    if (bytesTotal > 0) {
-                        emit(bytesDownloaded.toFloat() / bytesTotal.toFloat())
-                    }
-                }
-                cursor.close()
-            } else {
-                isDownloading = false
-                cursor?.close()
-            }
-            if (isDownloading) delay(500.milliseconds)
+        } catch (e: Exception) {
+            emit(DownloadState.Error(e.localizedMessage ?: "خطای ارتباط با سرور"))
         }
     }.flowOn(Dispatchers.IO)
 
-    private fun installApk(fileName: String) {
-        val apkFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), fileName)
+    fun installApk(apkFile: File) {
         if (!apkFile.exists()) return
 
         try {
             val contentUri = FileProvider.getUriForFile(
-                context, 
+                context,
                 "${context.packageName}.fileprovider",
                 apkFile
             )
@@ -177,6 +143,18 @@ class UpdateManager(private val context: Context) {
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(contentUri, "application/vnd.android.package-archive")
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(context, "خطا در اجرای فایل نصب: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    fun openInBrowser(url: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, url.toUri()).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             context.startActivity(intent)
         } catch (e: Exception) {
