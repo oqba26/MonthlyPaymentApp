@@ -1,6 +1,7 @@
 @file:OptIn(InternalSerializationApi::class)
 package com.oqba26.monthlypaymentapp.utils
 
+import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
@@ -58,6 +59,7 @@ class UpdateManager(private val context: Context) {
     }
 
     suspend fun checkForUpdate(): UpdateInfo? = withContext(Dispatchers.IO) {
+        cancelPendingSystemDownloads()
         if (!isNetworkAvailable()) return@withContext null
 
         try {
@@ -157,6 +159,32 @@ class UpdateManager(private val context: Context) {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
             context.startActivity(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun cancelPendingSystemDownloads() {
+        try {
+            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager ?: return
+            val query = DownloadManager.Query()
+            val cursor = downloadManager.query(query)
+            if (cursor != null) {
+                val idIndex = cursor.getColumnIndex(DownloadManager.COLUMN_ID)
+                val titleIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TITLE)
+                val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                while (cursor.moveToNext()) {
+                    if (idIndex != -1) {
+                        val id = cursor.getLong(idIndex)
+                        val title = if (titleIndex != -1) cursor.getString(titleIndex) ?: "" else ""
+                        val status = if (statusIndex != -1) cursor.getInt(statusIndex) else -1
+                        if (title.contains("به‌روزرسانی") || title.contains("MonthlyPaymentApp") || status == DownloadManager.STATUS_FAILED) {
+                            downloadManager.remove(id)
+                        }
+                    }
+                }
+                cursor.close()
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
