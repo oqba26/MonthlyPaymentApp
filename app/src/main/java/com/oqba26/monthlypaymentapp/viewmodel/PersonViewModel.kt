@@ -132,33 +132,32 @@ class PersonViewModel @Inject constructor(
             settingsRepository.authTokenFlow.collectLatest { token ->
                 if (token != null) {
                     networkRepository.observeRealtimeChanges()
-                    networkRepository.refresh()
 
-                    // شرط قبلی `persons.isNotEmpty()` بود که دو مشکل داشت: هم لیست خالیِ
-                    // معتبر سرور را نادیده می‌گرفت، و هم اگر واکشی شکست می‌خورد (چون refresh
-                    // خطا را می‌بلعید) روی داده‌ی قدیمی/ناقص merge می‌کرد.
-                    // حالا فقط بعد از یک refresh موفق merge می‌کنیم و خودِ merge هم غیرمخرب است.
-                    combine(
-                        networkRepository.getPersonsFlow(),
-                        networkRepository.getPaymentsFlow(),
-                        networkRepository.hasServerDataFlow()
-                    ) { persons, payments, hasServerData ->
-                        if (hasServerData) {
-                            if (!snapshotTakenThisSession) {
-                                // آخرین خط دفاع: قبل از اولین ادغام هر اجرا، وضعیت فعلی
-                                // ذخیره می‌شود تا اگر با وجود همه‌ی محافظت‌ها چیزی خراب شد،
-                                // کاربر بتواند از تنظیمات برش گرداند.
-                                backupManager.createSnapshot(BackupManager.REASON_BEFORE_SYNC)
-                                snapshotTakenThisSession = true
+                    launch {
+                        combine(
+                            networkRepository.getPersonsFlow(),
+                            networkRepository.getPaymentsFlow(),
+                            networkRepository.hasServerDataFlow()
+                        ) { persons, payments, hasServerData ->
+                            if (hasServerData) {
+                                if (!snapshotTakenThisSession) {
+                                    // آخرین خط دفاع: قبل از اولین ادغام هر اجرا، وضعیت فعلی
+                                    // ذخیره می‌شود تا اگر با وجود همه‌ی محافظت‌ها چیزی خراب شد،
+                                    // کاربر بتواند از تنظیمات برش گرداند.
+                                    backupManager.createSnapshot(BackupManager.REASON_BEFORE_SYNC)
+                                    snapshotTakenThisSession = true
+                                }
+                                localPersonRepository.mergeFromServer(persons, payments)
+                                true
+                            } else false
+                        }.collect { isUpdated ->
+                            if (isUpdated) {
+                                _toastMessage.emit("اطلاعات با سرور همگام‌سازی شد")
                             }
-                            localPersonRepository.mergeFromServer(persons, payments)
-                            true
-                        } else false
-                    }.collect { isUpdated ->
-                        if (isUpdated) {
-                            _toastMessage.emit("اطلاعات با سرور همگام‌سازی شد")
                         }
                     }
+
+                    networkRepository.refresh()
                 }
             }
         }
@@ -491,7 +490,15 @@ class PersonViewModel @Inject constructor(
 
                 PersonScreenEvent.RefreshData -> {
                     _isRefreshing.value = true
-                    networkRepository.refresh()
+                    val success = networkRepository.refresh()
+                    if (success) {
+                        val persons = networkRepository.getPersonsFlow().first()
+                        val payments = networkRepository.getPaymentsFlow().first()
+                        localPersonRepository.mergeFromServer(persons, payments)
+                        _toastMessage.emit("اطلاعات با سرور با موفقیت همگام‌سازی شد")
+                    } else {
+                        _toastMessage.emit("خطا در همگام‌سازی با سرور")
+                    }
                     _isRefreshing.value = false
                 }
                 else -> {}

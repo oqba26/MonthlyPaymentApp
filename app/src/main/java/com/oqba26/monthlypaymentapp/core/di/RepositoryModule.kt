@@ -20,8 +20,8 @@ object RepositoryModule {
 
     @Provides
     @Singleton
-    fun provideNetworkRepository(): NetworkRepository {
-        return NetworkRepository()
+    fun provideNetworkRepository(settingsRepository: SettingsRepository): NetworkRepository {
+        return NetworkRepository(settingsRepository)
     }
 
     @Provides

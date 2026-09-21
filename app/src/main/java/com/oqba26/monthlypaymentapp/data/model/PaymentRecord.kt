@@ -16,19 +16,19 @@ data class PaymentRecord(
     @PrimaryKey 
     @SerialName("id") val id: String = UUID.randomUUID().toString(),
     
-    @SerialName("person_id") val personId: String,
+    @SerialName("personId") val personId: String,
     
     @SerialName("amount") val amount: Double,
     
-    @SerialName("shamsi_year") val shamsiYear: Int,
+    @SerialName("shamsiYear") val shamsiYear: Int,
     
-    @SerialName("shamsi_month") val shamsiMonth: Int,
+    @SerialName("shamsiMonth") val shamsiMonth: Int,
     
     @SerialName("timestamp") val timestamp: Long = System.currentTimeMillis(),
     
     @SerialName("description") val description: String? = "",
 
-    @SerialName("created_at") val createdAt: Long? = null,
+    @SerialName("createdAt") val createdAt: Long? = null,
 
     @SerialName("category") val category: String = "salary",
 

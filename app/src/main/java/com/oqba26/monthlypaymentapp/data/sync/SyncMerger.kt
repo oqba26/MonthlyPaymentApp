@@ -75,13 +75,9 @@ object SyncMerger {
             person.copy(id = resolvedId, name = name, needsSync = false)
         }
 
-        val serverIds = resolved.map { it.id }.toSet()
-
         return MergePlan(
             upserts = resolved.filterNot { it.id in protectedIds },
-            deleteIds = local
-                .map { it.id }
-                .filterNot { it in serverIds || it in protectedIds }
+            deleteIds = emptyList() // هرگز رکوردهای محلی را به خاطر غیبت در سرور حذف نمی‌کنیم
         )
     }
 
@@ -91,15 +87,12 @@ object SyncMerger {
         pendingIds: Set<String>
     ): MergePlan<PaymentRecord> {
         val protectedIds = protectedPaymentIds(local, pendingIds)
-        val serverIds = server.map { it.id }.toSet()
 
         return MergePlan(
             upserts = server
                 .filterNot { it.id in protectedIds }
                 .map { it.copy(needsSync = false) },
-            deleteIds = local
-                .map { it.id }
-                .filterNot { it in serverIds || it in protectedIds }
+            deleteIds = emptyList() // هرگز رکوردهای محلی را به خاطر غیبت در سرور حذف نمی‌کنیم
         )
     }
 }

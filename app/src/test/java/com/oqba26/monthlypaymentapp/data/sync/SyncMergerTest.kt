@@ -70,17 +70,17 @@ class SyncMergerTest {
     }
 
     @Test
-    fun `شخص محلی غیر pending که در سرور نیست حذف می شود`() {
+    fun `شخص محلی غیر pending که در سرور نیست حذف نمی شود`() {
         val local = listOf(person("a"), person("b"))
         val server = listOf(person("a"))
 
         val plan = SyncMerger.planPersons(local, server, pendingIds = emptySet())
 
-        assertEquals(listOf("b"), plan.deleteIds)
+        assertEquals(emptyList<String>(), plan.deleteIds)
     }
 
     @Test
-    fun `سرور خالی هیچ رکورد محافظت شده ای را پاک نمی کند`() {
+    fun `سرور خالی هیچ رکوردی را پاک نمی کند`() {
         val local = listOf(
             person("a", needsSync = true),
             person("b"),
@@ -89,8 +89,7 @@ class SyncMergerTest {
 
         val plan = SyncMerger.planPersons(local, server = emptyList(), pendingIds = setOf("b"))
 
-        // a با needsSync و b از طریق صف محافظت شده‌اند؛ فقط c حذف می‌شود.
-        assertEquals(listOf("c"), plan.deleteIds)
+        assertEquals(emptyList<String>(), plan.deleteIds)
         assertTrue(plan.upserts.isEmpty())
     }
 
@@ -170,17 +169,17 @@ class SyncMergerTest {
     }
 
     @Test
-    fun `پرداخت حذف شده در سرور از گوشی هم حذف می شود`() {
+    fun `پرداخت غایب در سرور حذف نمی شود`() {
         val local = listOf(payment("x"), payment("y"))
         val server = listOf(payment("x"))
 
         val plan = SyncMerger.planPayments(local, server, pendingIds = emptySet())
 
-        assertEquals(listOf("y"), plan.deleteIds)
+        assertEquals(emptyList<String>(), plan.deleteIds)
     }
 
     @Test
-    fun `سرور خالی پرداخت های در صف را نگه می دارد`() {
+    fun `سرور خالی پرداخت ها را حذف نمی کند`() {
         val local = listOf(
             payment("pending", needsSync = true),
             payment("synced")
@@ -188,7 +187,7 @@ class SyncMergerTest {
 
         val plan = SyncMerger.planPayments(local, server = emptyList(), pendingIds = emptySet())
 
-        assertEquals(listOf("synced"), plan.deleteIds)
+        assertEquals(emptyList<String>(), plan.deleteIds)
     }
 
     @Test

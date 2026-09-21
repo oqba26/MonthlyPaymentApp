@@ -30,8 +30,8 @@ android {
         applicationId = "com.oqba26.monthlypaymentapp"
         minSdk = 25
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.0.6"
+        versionCode = 8
+        versionName = "1.0.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -55,8 +55,7 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "SUPABASE_URL", "\"https://ftufsygeartwukonclkz.supabase.co\"")
-            buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_H4mAU1Ds-vZ22HwMSfCaBQ_QjBfmRd5\"")
+            buildConfigField("String", "POCKETBASE_URL", "\"http://194.146.68.50/\"")
         }
         release {
             val storeFileProp = getProp("RELEASE_STORE_FILE")
@@ -68,8 +67,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("String", "SUPABASE_URL", "\"https://ftufsygeartwukonclkz.supabase.co\"")
-            buildConfigField("String", "SUPABASE_KEY", "\"sb_publishable_H4mAU1Ds-vZ22HwMSfCaBQ_QjBfmRd5\"")
+            buildConfigField("String", "POCKETBASE_URL", "\"http://194.146.68.50/\"")
         }
     }
 
@@ -111,10 +109,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended-android:1.6.7")
     implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
 
-    // Supabase
-    implementation(libs.supabase.postgrest)
-    implementation(libs.supabase.auth)
-    implementation(libs.supabase.realtime)
+    // PocketBase / Ktor Network
     implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)

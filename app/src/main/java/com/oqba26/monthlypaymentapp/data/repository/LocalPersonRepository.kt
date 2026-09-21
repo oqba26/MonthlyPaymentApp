@@ -53,12 +53,24 @@ class LocalPersonRepository(
             val personPlan = SyncMerger.planPersons(localPersons, persons, pendingIds)
             val paymentPlan = SyncMerger.planPayments(localPayments, payments, pendingIds)
 
-            // پرداخت‌ها اول حذف می‌شوند تا اگر کلید خارجی اضافه شد، ترتیب درست باشد.
-            if (paymentPlan.deleteIds.isNotEmpty()) paymentDao.deleteByIds(paymentPlan.deleteIds)
-            if (personPlan.deleteIds.isNotEmpty()) personDao.deleteByIds(personPlan.deleteIds)
-
             if (personPlan.upserts.isNotEmpty()) personDao.insertAll(personPlan.upserts)
             if (paymentPlan.upserts.isNotEmpty()) paymentDao.insertAllPaymentRecords(paymentPlan.upserts)
+
+            // خودترمیمی: اگر رکوردهایی در دیتابیس محلی هستند که در سرور وجود ندارند و در صف هم نیستند،
+            // آن‌ها را دوباره برای ارسال به سرور ثبت می‌کنیم تا سرور و کلاینت همگام شوند.
+            val serverPersonIds = persons.map { it.id }.toSet()
+            val missingPersons = localPersons.filter { it.id !in serverPersonIds && it.id !in pendingIds }
+            for (p in missingPersons) {
+                personDao.insertAll(listOf(p.copy(needsSync = true)))
+                syncQueueDao.insert(SyncQueue(entityId = p.id, type = SyncType.PERSON, operation = SyncOperation.INSERT))
+            }
+
+            val serverPaymentIds = payments.map { it.id }.toSet()
+            val missingPayments = localPayments.filter { it.id !in serverPaymentIds && it.id !in pendingIds }
+            for (p in missingPayments) {
+                paymentDao.insertAllPaymentRecords(listOf(p.copy(needsSync = true)))
+                syncQueueDao.insert(SyncQueue(entityId = p.id, type = SyncType.PAYMENT, operation = SyncOperation.INSERT))
+            }
         }
     }
 

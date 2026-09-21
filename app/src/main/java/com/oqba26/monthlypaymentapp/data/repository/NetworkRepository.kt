@@ -6,72 +6,50 @@ import com.oqba26.monthlypaymentapp.data.model.AuthResponse
 import com.oqba26.monthlypaymentapp.data.model.PaymentRecord
 import com.oqba26.monthlypaymentapp.data.model.Person
 import com.oqba26.monthlypaymentapp.data.remote.ApiClient
-import io.github.jan.supabase.gotrue.auth
-import io.github.jan.supabase.gotrue.providers.builtin.Email
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.query.Order
-import io.github.jan.supabase.realtime.PostgresAction
-import io.github.jan.supabase.realtime.channel
-import io.github.jan.supabase.realtime.postgresChangeFlow
-import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import java.util.UUID
 
-class NetworkRepository {
+class NetworkRepository(
+    private val settingsRepository: SettingsRepository? = null
+) {
 
-    private val supabase = ApiClient.client
+    private val pocketBase = ApiClient.pocketBase
     private val _personsFlow = MutableStateFlow<List<Person>>(emptyList())
     private val _paymentsFlow = MutableStateFlow<List<PaymentRecord>>(emptyList())
     private val repositoryScope = CoroutineScope(Dispatchers.IO)
 
     /**
      * تا وقتی حداقل یک [refresh] موفق انجام نشده باشد `false` است.
-     *
-     * چرا لازم است: مقدار اولیه‌ی `_personsFlow`/`_paymentsFlow` لیست خالی است و از لیست خالیِ
-     * واقعی (کاربری که هنوز داده‌ای ثبت نکرده) قابل تشخیص نیست. merge کردن روی آن لیست خالیِ
-     * قالبی، همه‌ی داده‌ی محلی را پاک می‌کند. مصرف‌کننده باید منتظر `true` بماند.
      */
     private val _hasServerData = MutableStateFlow(false)
     fun hasServerDataFlow(): Flow<Boolean> = _hasServerData.asStateFlow()
+
+    init {
+        settingsRepository?.authTokenFlow?.let { authFlow ->
+            repositoryScope.launch {
+                authFlow.collect { token ->
+                    pocketBase.authToken = token
+                }
+            }
+        }
+    }
 
     // --- Realtime Operations ---
     fun observeRealtimeChanges() {
         repositoryScope.launch {
             try {
-                // اطمینان از اتصال قبل از اشتراک در کانال
-                supabase.realtime.connect()
-                
-                val myChannel = supabase.channel("db-changes")
-                
-                // گوش دادن به تغییرات جدول اشخاص
-                myChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
-                    table = "persons"
-                }.collect {
-                    Log.d("Supabase-Realtime", "Change detected in persons table")
+                pocketBase.listenRealtime(listOf("persons", "payments")).collect { event ->
+                    Log.d("PocketBase-Realtime", "Change detected in PocketBase: $event")
                     refresh()
                 }
-
-                // گوش دادن به تغییرات جدول پرداخت‌ها
-                launch {
-                    myChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
-                        table = "payments"
-                    }.collect {
-                        Log.d("Supabase-Realtime", "Change detected in payments table")
-                        refresh()
-                    }
-                }
-                
-                myChannel.subscribe()
-                Log.d("Supabase-Realtime", "Subscribed to all changes")
             } catch (e: Exception) {
-                Log.e("Supabase-Realtime", "Realtime connection error, retrying...", e)
+                Log.e("PocketBase-Realtime", "Realtime connection error, retrying...", e)
             }
         }
     }
@@ -79,49 +57,33 @@ class NetworkRepository {
     // --- Auth Operations ---
     suspend fun register(request: AuthRequest): AuthResponse? {
         return try {
-            supabase.auth.signUpWith(Email) {
-                email = request.email
-                password = request.password
-            }
-            val session = supabase.auth.currentSessionOrNull()
-            AuthResponse(token = session?.accessToken ?: "success", userId = session?.user?.id)
+            pocketBase.createUser("users", request.email, request.password)
+            val authResp = pocketBase.authWithPassword("users", request.email, request.password)
+            val userId = authResp.record?.get("id")?.toString()?.replace("\"", "")
+            AuthResponse(token = authResp.token, userId = userId)
         } catch (e: Exception) {
-            Log.e("Supabase", "register error", e)
+            Log.e("PocketBase", "register error", e)
             null
         }
     }
 
     suspend fun login(request: AuthRequest): AuthResponse? {
         return try {
-            supabase.auth.signInWith(Email) {
-                email = request.email
-                password = request.password
-            }
-            val session = supabase.auth.currentSessionOrNull()
-            AuthResponse(token = session?.accessToken ?: "", userId = session?.user?.id)
+            val authResp = pocketBase.authWithPassword("users", request.email, request.password)
+            val userId = authResp.record?.get("id")?.toString()?.replace("\"", "")
+            AuthResponse(token = authResp.token, userId = userId)
         } catch (e: Exception) {
-            Log.e("Supabase", "login error", e)
+            Log.e("PocketBase", "login error", e)
             null
         }
     }
 
     // --- Person Operations ---
-    /**
-     * ارسال شخص به سرور با upsert.
-     *
-     * upsert (و نه insert) عمداً انتخاب شده تا این عملیات idempotent باشد: اگر تلاش اول
-     * به سرور رسیده باشد ولی پاسخش به‌خاطر timeout به ما نرسیده باشد، تلاش دوم رکورد
-     * تکراری نمی‌سازد. صف سینک متکی به همین خاصیت است تا بتواند بی‌خطر retry کند.
-     *
-     * اعتبارسنجی تکراری‌بودن نام اینجا انجام نمی‌شود؛ آن کار در PersonViewModel روی
-     * داده‌ی محلی (که همیشه کامل است) انجام می‌گیرد. کش _personsFlow ممکن است خالی یا
-     * قدیمی باشد و نتیجه‌ی غلط بدهد.
-     */
     suspend fun addPerson(person: Person): Boolean {
         return try {
             val trimmedName = person.name.trim()
             if (trimmedName.isEmpty()) {
-                Log.w("Supabase", "addPerson skipped: blank name")
+                Log.w("PocketBase", "addPerson skipped: blank name")
                 return false
             }
 
@@ -131,22 +93,22 @@ class NetworkRepository {
                 person.copy(name = trimmedName)
             }
 
-            supabase.from("persons").upsert(personToUpsert)
+            pocketBase.upsertRecord("persons", "id='${personToUpsert.id}'", personToUpsert)
             true
         } catch (e: Exception) {
-            Log.e("Supabase", "addPerson error", e)
+            Log.e("PocketBase", "addPerson error", e)
             false
         }
     }
 
     suspend fun deletePersonAndPayments(personId: String): Boolean {
         return try {
-            supabase.from("persons").delete {
-                filter { eq("id", personId) }
-            }
+            pocketBase.deleteRecordByFilter("payments", "personId='$personId'")
+            pocketBase.deleteRecordByFilter("persons", "id='$personId'")
             true
         } catch (e: Exception) {
-            Log.e("Supabase", "deletePerson error", e); false
+            Log.e("PocketBase", "deletePerson error", e)
+            false
         }
     }
 
@@ -173,68 +135,59 @@ class NetworkRepository {
             }
             if (isDuplicate) return 409
 
-            supabase.from("persons").update(
-                buildJsonObject {
-                    put("name", trimmedName)
-                    put("phoneNumber", phoneNumber?.trim())
-                    put("monthlyCommitment", monthlyCommitment)
-                    put("startMonth", startMonth)
-                    put("startYear", startYear)
-                },
-            ) {
-                filter { eq("id", personId) }
+            val updatedPerson = currentPerson?.copy(
+                name = trimmedName,
+                phoneNumber = phoneNumber?.trim(),
+                monthlyCommitment = monthlyCommitment,
+                startMonth = startMonth,
+                startYear = startYear
+            )
+            if (updatedPerson != null) {
+                pocketBase.upsertRecord("persons", "id='$personId'", updatedPerson)
             }
             200
         } catch (e: Exception) {
-            Log.e("Supabase", "updatePerson error", e)
+            Log.e("PocketBase", "updatePerson error", e)
             500
         }
     }
 
     suspend fun updatePersonArchivedStatus(personId: String, isArchived: Boolean): Boolean {
         return try {
-            supabase.from("persons").update(
-                buildJsonObject {
-                    put("isArchived", isArchived)
-                }
-            ) {
-                filter { eq("id", personId) }
+            val currentPerson = _personsFlow.value.find { it.id == personId }
+            if (currentPerson != null) {
+                pocketBase.upsertRecord("persons", "id='$personId'", currentPerson.copy(isArchived = isArchived))
             }
             true
         } catch (e: Exception) {
-            Log.e("Supabase", "updateArchived error", e); false
+            Log.e("PocketBase", "updateArchived error", e)
+            false
         }
     }
 
     suspend fun updatePersonDisplayOrder(personId: String, displayOrder: Long): Boolean {
         return try {
-            supabase.from("persons").update(
-                buildJsonObject {
-                    put("displayOrder", displayOrder)
-                }
-            ) {
-                filter { eq("id", personId) }
+            val currentPerson = _personsFlow.value.find { it.id == personId }
+            if (currentPerson != null) {
+                pocketBase.upsertRecord("persons", "id='$personId'", currentPerson.copy(displayOrder = displayOrder))
             }
             true
         } catch (e: Exception) {
-            Log.e("Supabase", "updateOrder error", e); false
+            Log.e("PocketBase", "updateOrder error", e)
+            false
         }
     }
 
     fun getPersonsFlow(): Flow<List<Person>> = _personsFlow.asStateFlow()
 
     // --- Payment Operations ---
-    /**
-     * ارسال پرداخت به سرور با upsert — به همان دلیل idempotent بودن که در [addPerson] توضیح داده شد.
-     * ضمناً همین باعث می‌شود ویرایش پرداخت (SyncOperation.UPDATE) هم درست کار کند؛ قبلاً insert
-     * بود و روی رکورد موجود شکست می‌خورد.
-     */
     suspend fun addPayment(paymentRecord: PaymentRecord): Boolean {
         return try {
-            supabase.from("payments").upsert(paymentRecord)
+            pocketBase.upsertRecord("payments", "id='${paymentRecord.id}'", paymentRecord)
             true
         } catch (e: Exception) {
-            Log.e("Supabase", "addPayment error", e); false
+            Log.e("PocketBase", "addPayment error", e)
+            false
         }
     }
 
@@ -244,16 +197,14 @@ class NetworkRepository {
         
         while (retries <= maxRetries) {
             try {
-                supabase.from("payments").delete {
-                    filter { eq("id", paymentId) }
-                }
-                Log.d("Supabase", "deletePayment Success: $paymentId")
+                pocketBase.deleteRecordByFilter("payments", "id='$paymentId'")
+                Log.d("PocketBase", "deletePayment Success: $paymentId")
                 return true
             } catch (e: Exception) {
                 retries++
-                Log.e("Supabase", "deletePayment error (Attempt $retries): ${e.message}", e)
+                Log.e("PocketBase", "deletePayment error (Attempt $retries): ${e.message}", e)
                 if (retries > maxRetries) return false
-                kotlinx.coroutines.delay(1000L * retries) // Exponential backoff-ish
+                delay(1000L * retries)
             }
         }
         return false
@@ -263,31 +214,20 @@ class NetworkRepository {
 
     /**
      * واکشی کامل داده‌ها از سرور.
-     *
-     * @return true فقط اگر **هر دو** واکشی موفق بوده باشند.
-     *
-     * دو تضمین مهم که فراخوان‌ها به آن تکیه می‌کنند:
-     *  ۱. در صورت شکست، flow‌ها **دست‌نخورده** می‌مانند. قبلاً خطا بلعیده می‌شد و صدازننده
-     *     نمی‌فهمید واکشی شکست خورده؛ نتیجه‌اش merge روی داده‌ی ناقص و پاک شدن داده‌ی محلی بود.
-     *  ۲. مقداردهی flow‌ها اتمیک است — یا هر دو با هم به‌روز می‌شوند یا هیچ‌کدام. قبلاً اگر
-     *     واکشی پرداخت‌ها شکست می‌خورد، لیست اشخاص جدید کنار لیست پرداخت‌های قدیمی می‌نشست.
      */
     suspend fun refresh(): Boolean {
         return try {
-            val persons = supabase.from("persons").select().decodeList<Person>()
-            val payments = supabase.from("payments").select {
-                order("timestamp", order = Order.DESCENDING)
-            }.decodeList<PaymentRecord>()
+            val persons = pocketBase.getRecords<Person>("persons")
+            val payments = pocketBase.getRecords<PaymentRecord>("payments", sort = "-timestamp")
 
-            // فقط بعد از موفقیت هر دو واکشی مقداردهی می‌کنیم
             _personsFlow.value = persons
             _paymentsFlow.value = payments
             _hasServerData.value = true
 
-            Log.d("Supabase", "Refresh Success: ${persons.size} persons, ${payments.size} payments")
+            Log.d("PocketBase", "Refresh Success: ${persons.size} persons, ${payments.size} payments")
             true
         } catch (e: Exception) {
-            Log.e("Supabase", "refresh error — داده‌های محلی دست‌نخورده باقی می‌مانند", e)
+            Log.e("PocketBase", "refresh error", e)
             false
         }
     }
