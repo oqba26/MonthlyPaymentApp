@@ -30,7 +30,9 @@ import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Search
@@ -92,6 +94,7 @@ import com.oqba26.monthlypaymentapp.utils.toPersianDigits
 import com.oqba26.monthlypaymentapp.viewmodel.ContactMatch
 import com.oqba26.monthlypaymentapp.viewmodel.ContactSuggestion
 import com.oqba26.monthlypaymentapp.viewmodel.DashboardUiModel
+import com.oqba26.monthlypaymentapp.viewmodel.FinancialReportData
 import com.oqba26.monthlypaymentapp.viewmodel.PersonListType
 import com.oqba26.monthlypaymentapp.viewmodel.PersonScreenEvent
 import com.oqba26.monthlypaymentapp.viewmodel.PersonUiModel
@@ -112,6 +115,9 @@ fun PersonScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     val dashboardData by viewModel.dashboardData.collectAsState()
+    val financialReportData by viewModel.financialReportData.collectAsState()
+    val showFinancialReportDialog by viewModel.showFinancialReportDialog.collectAsState()
+    val isOperatorMode by viewModel.isOperatorMode.collectAsState()
     val defaultPaymentAmount by viewModel.defaultPaymentAmountFlow.collectAsState(initial = 0.0)
     val cardNumbers by viewModel.cardNumbersFlow.collectAsState(initial = emptyList())
     val personForPaymentDialog by viewModel.personForPaymentDialog.collectAsState()
@@ -179,7 +185,12 @@ fun PersonScreen(
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 0.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                DashboardCard(data = dashboardData)
+                DashboardCard(
+                    data = dashboardData,
+                    financialReportData = financialReportData,
+                    isOperatorMode = isOperatorMode,
+                    onOpenReportClick = { viewModel.onShowFinancialReport() }
+                )
 
                 OutlinedTextField(
                     value = searchQuery,
@@ -301,15 +312,19 @@ fun PersonScreen(
 
     // Dialogs
     personForPaymentDialog?.let { person ->
+        val currentCategory by viewModel.currentCategory.collectAsState()
+        val isMosque = currentCategory == "mosque"
         val currentDay = getCurrentShamsiDay()
         val currentMonth = getCurrentShamsiMonth()
-        val targetMonth = if (currentDay >= 20) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1
+        val targetMonth = if (isMosque) currentMonth else (if (currentDay >= 20) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1)
 
         val monthName = getPersianMonthName(targetMonth)
         val currentDateTime = formatTimestampToPersianDateTime(System.currentTimeMillis())
         
         val isCurrentMonth = targetMonth == currentMonth
-        val initialDesc = if (isCurrentMonth) {
+        val initialDesc = if (isMosque) {
+            "پرداخت کمک به مسجد در تاریخ $currentDateTime ثبت شد."
+        } else if (isCurrentMonth) {
             "پرداخت برای ماه جاری در تاریخ $currentDateTime ثبت شد."
         } else {
             "پرداخت برای $monthName در تاریخ $currentDateTime ثبت شد."
@@ -402,6 +417,13 @@ fun PersonScreen(
                 contactViewModel.onBulkSelectionConfirmed(selected)
             },
             onDismiss = { contactViewModel.onDismissBulkSmsDialog() }
+        )
+    }
+
+    if (showFinancialReportDialog) {
+        FinancialReportDialog(
+            data = financialReportData,
+            onDismiss = { viewModel.onDismissFinancialReport() }
         )
     }
 
@@ -1048,7 +1070,10 @@ fun SelectCardDialog(
 
 @Composable
 fun DashboardCard(
-    data: DashboardUiModel
+    data: DashboardUiModel,
+    financialReportData: FinancialReportData,
+    isOperatorMode: Boolean = false,
+    onOpenReportClick: () -> Unit
 ) {
     val animatedProgress by animateFloatAsState(
         targetValue = data.progress,
@@ -1063,29 +1088,236 @@ fun DashboardCard(
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("وضعیت پرداخت‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
+                Text("وضعیت پرداخت‌های ماه جاری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text("باقیمانده: ${(data.totalCount - data.paidCount).toString().toPersianDigits()}", style = MaterialTheme.typography.bodySmall)
             }
             LinearProgressIndicator(
                 progress = { animatedProgress },
-                modifier = Modifier.fillMaxWidth().height(8.dp).clip(MaterialTheme.shapes.medium)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(MaterialTheme.shapes.medium)
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("مجموع درآمد ماه", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Text("${formatNumberAsPersian(data.totalIncome)} تومان", style = MaterialTheme.typography.bodyMedium)
+                Text("مجموع درآمد ماه جاری", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("${formatNumberAsPersian(data.totalIncome)} تومان", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            }
+
+            if (financialReportData.totalOverdueDebt > 0 || financialReportData.debtors.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🔴 مجموع بدهی‌های معوقه:",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = "${formatNumberAsPersian(financialReportData.totalOverdueDebt)} تومان",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    val debtorNamesText = financialReportData.debtors.joinToString("، ") { 
+                        "${it.personName} (${formatNumberAsPersian(it.totalDebtAmount)})" 
+                    }
+
+                    Text(
+                        text = "بدهکاران (${financialReportData.totalDebtorsCount.toString().toPersianDigits()} نفر): $debtorNamesText",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            if (!isOperatorMode) {
+                OutlinedButton(
+                    onClick = onOpenReportClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 2.dp),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Assessment,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("مشاهده گزارش کامل مالی و درآمدهای گذشته", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FinancialReportDialog(
+    data: FinancialReportData,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 600.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "📊 گزارش آمار و درآمدهای مالی",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "بستن")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("💰 کل درآمدهای تمام زمان‌ها:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text("${formatNumberAsPersian(data.totalAllTimeIncome)} تومان", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("🔴 کل بدهی‌های معوقه فعلی:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                                Text("${formatNumberAsPersian(data.totalOverdueDebt)} تومان (${data.totalDebtorsCount.toString().toPersianDigits()} نفر)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "تفکیک درآمد ماهانه ماه‌های گذشته",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    if (data.monthlyReports.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("هیچ دریافتی تا کنون ثبت نشده است.", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(data.monthlyReports) { report ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "${report.monthName} ${report.year.toString().toPersianDigits()}",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                shape = MaterialTheme.shapes.small
+                                            ) {
+                                                Text(
+                                                    text = "${formatNumberAsPersian(report.totalAmount)} تومان (${report.paymentCount.toString().toPersianDigits()} پرداخت)",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+
+                                        if (report.payerNames.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "پرداخت‌کنندگان: ${report.payerNames.joinToString("، ")}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("بستن")
+                    }
+                }
             }
         }
     }
@@ -1157,12 +1389,22 @@ fun PersonListItem(
                     shape = MaterialTheme.shapes.small,
                     modifier = Modifier.clickable { onDebtClick(person) }
                 ) {
-                    Text(
-                        text = "${person.debtCount.toString().toPersianDigits()} بدهی",
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "${formatNumberAsPersian(person.totalDebtAmount)} تومان",
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "${person.debtCount.toString().toPersianDigits()} ماه بدهکار",
+                            color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
                 }
             }
 

@@ -46,8 +46,28 @@ class SettingsViewModel @Inject constructor(
     val cardNumbers: StateFlow<List<String>> = settingsRepository.cardNumbersFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
+    val isOperatorMode: StateFlow<Boolean> = settingsRepository.isOperatorModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), false)
+
+    val adminPin: StateFlow<String> = settingsRepository.adminPinFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), "1234")
+
     private val _toastMessage = MutableSharedFlow<String>()
     val toastMessage = _toastMessage.asSharedFlow()
+
+    fun setOperatorMode(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setOperatorMode(enabled)
+            _toastMessage.emit(if (enabled) "حالت اپراتور (محدود) فعال شد" else "حالت مدیریت فعال شد")
+        }
+    }
+
+    fun setAdminPin(newPin: String) {
+        viewModelScope.launch {
+            settingsRepository.setAdminPin(newPin)
+            _toastMessage.emit("رمز مدیریت با موفقیت تغییر یافت")
+        }
+    }
 
     fun saveReminderDay(day: String) {
         viewModelScope.launch {

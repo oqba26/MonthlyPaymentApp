@@ -145,3 +145,28 @@ data class DashboardUiModel(
     val totalIncome: Double = 0.0,
     val progress: Float = 0f
 )
+
+data class MonthlyFinancialReport(
+    val year: Int,
+    val month: Int,
+    val monthName: String,
+    val totalAmount: Double,
+    val paymentCount: Int,
+    val payerNames: List<String>
+)
+
+data class DebtorDetail(
+    val personId: String,
+    val personName: String,
+    val debtCount: Int,
+    val totalDebtAmount: Double,
+    val unpaidMonthsNames: List<String> = emptyList()
+)
+
+data class FinancialReportData(
+    val totalAllTimeIncome: Double = 0.0,
+    val totalOverdueDebt: Double = 0.0,
+    val totalDebtorsCount: Int = 0,
+    val debtors: List<DebtorDetail> = emptyList(),
+    val monthlyReports: List<MonthlyFinancialReport> = emptyList()
+)

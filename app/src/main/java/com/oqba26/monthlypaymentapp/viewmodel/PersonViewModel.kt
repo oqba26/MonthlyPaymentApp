@@ -16,6 +16,7 @@ import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiYear
 import com.oqba26.monthlypaymentapp.utils.getPersianMonthName
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -68,8 +69,17 @@ class PersonViewModel @Inject constructor(
     private val _infoMessage = MutableSharedFlow<String>()
     val infoMessage = _infoMessage.asSharedFlow()
 
+    val isOperatorMode: StateFlow<Boolean> = settingsRepository.isOperatorModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), false)
+
     private val _uiState = MutableStateFlow(PersonListUiState())
     val uiState: StateFlow<PersonListUiState> = _uiState.asStateFlow()
+
+    private val _financialReportData = MutableStateFlow(FinancialReportData())
+    val financialReportData: StateFlow<FinancialReportData> = _financialReportData.asStateFlow()
+
+    private val _showFinancialReportDialog = MutableStateFlow(false)
+    val showFinancialReportDialog: StateFlow<Boolean> = _showFinancialReportDialog.asStateFlow()
 
     private val _showAddPersonDialog = MutableStateFlow(false)
     val showAddPersonDialog: StateFlow<Boolean> = _showAddPersonDialog.asStateFlow()
@@ -92,10 +102,11 @@ class PersonViewModel @Inject constructor(
                     localPersonRepository.getAllPersonsFlow(),
                     localPersonRepository.getAllPaymentsFlow(),
                     _selectedYear,
-                    _currentCategory
+                    _currentCategory,
                 ) { persons, allPayments, year, category ->
                     val person = persons.find { it.id == personId }
                     val personCategory = person?.category ?: category
+                    val isMosque = (personCategory == "mosque")
                     val paymentsForPersonInYear = allPayments.filter {
                         (it.personId == personId) && (it.shamsiYear == year) && (it.category == personCategory)
                     }
@@ -106,12 +117,18 @@ class PersonViewModel @Inject constructor(
                         val payment = paymentsForPersonInYear.find { it.shamsiMonth == month }
                         
                         // بررسی شروع تعهد
-                        val isBeforeCommitment = if (person != null) {
-                            year < person.startYear || (year == person.startYear && month < person.startMonth)
-                        } else false
+                        val isBeforeCommitment = (person != null) &&
+                            (year < person.startYear || (year == person.startYear && month < person.startMonth))
 
                         val status = when {
                             payment != null -> MonthStatus.PAID
+                            isMosque -> {
+                                if (year == currentYear && month == currentMonth) {
+                                    MonthStatus.AVAILABLE
+                                } else {
+                                    MonthStatus.NOT_COMMITTED
+                                }
+                            }
                             isBeforeCommitment -> MonthStatus.NOT_COMMITTED
                             year < currentYear -> MonthStatus.PAST_YEAR
                             year > currentYear -> MonthStatus.FUTURE_YEAR
@@ -133,26 +150,28 @@ class PersonViewModel @Inject constructor(
                 if (token != null) {
                     networkRepository.observeRealtimeChanges()
 
-                    launch {
-                        combine(
-                            networkRepository.getPersonsFlow(),
-                            networkRepository.getPaymentsFlow(),
-                            networkRepository.hasServerDataFlow()
-                        ) { persons, payments, hasServerData ->
-                            if (hasServerData) {
-                                if (!snapshotTakenThisSession) {
-                                    // آخرین خط دفاع: قبل از اولین ادغام هر اجرا، وضعیت فعلی
-                                    // ذخیره می‌شود تا اگر با وجود همه‌ی محافظت‌ها چیزی خراب شد،
-                                    // کاربر بتواند از تنظیمات برش گرداند.
-                                    backupManager.createSnapshot(BackupManager.REASON_BEFORE_SYNC)
-                                    snapshotTakenThisSession = true
+                    coroutineScope {
+                        launch {
+                            combine(
+                                networkRepository.getPersonsFlow(),
+                                networkRepository.getPaymentsFlow(),
+                                networkRepository.hasServerDataFlow()
+                            ) { persons, payments, hasServerData ->
+                                if (hasServerData) {
+                                    if (!snapshotTakenThisSession) {
+                                        // آخرین خط دفاع: قبل از اولین ادغام هر اجرا، وضعیت فعلی
+                                        // ذخیره می‌شود تا اگر با وجود همه‌ی محافظت‌ها چیزی خراب شد،
+                                        // کاربر بتواند از تنظیمات برش گرداند.
+                                        backupManager.createSnapshot(BackupManager.REASON_BEFORE_SYNC)
+                                        snapshotTakenThisSession = true
+                                    }
+                                    localPersonRepository.mergeFromServer(persons, payments)
+                                    true
+                                } else false
+                            }.collect { isUpdated ->
+                                if (isUpdated) {
+                                    _toastMessage.emit("اطلاعات با سرور همگام‌سازی شد")
                                 }
-                                localPersonRepository.mergeFromServer(persons, payments)
-                                true
-                            } else false
-                        }.collect { isUpdated ->
-                            if (isUpdated) {
-                                _toastMessage.emit("اطلاعات با سرور همگام‌سازی شد")
                             }
                         }
                     }
@@ -199,7 +218,8 @@ class PersonViewModel @Inject constructor(
                             allPayments.none { it.personId == person.id && it.shamsiYear == currentYear && it.shamsiMonth == m && it.category == category }
                         }
                         val defaultAmount = settingsRepository.defaultPaymentAmountFlow.first()
-                        Triple(unpaid.size, unpaid.size * defaultAmount, unpaid.map { getPersianMonthName(it) } to unpaid)
+                        val amountPerMonth = if (person.monthlyCommitment > 0) person.monthlyCommitment else defaultAmount
+                        Triple(unpaid.size, unpaid.size * amountPerMonth, unpaid.map { getPersianMonthName(it) } to unpaid)
                     }
 
                     val (debtCount, totalDebtAmount, unpaidData) = unpaidResult
@@ -231,6 +251,53 @@ class PersonViewModel @Inject constructor(
                 updateDashboard(uiModels.size, relevantPayments)
 
                 val (paidModels, unpaidModels) = uiModels.partition { it.hasPaidThisMonth }
+
+                // محاسبه گزارشات مالی جامع
+                val personsMap = persons.associateBy { it.id }
+                val categoryPayments = allPayments.filter { it.category == category }
+                val totalAllTimeIncome = categoryPayments.sumOf { it.amount }
+
+                val debtorsList = unpaidModels.filter { it.debtCount > 0 }.map { personModel ->
+                    DebtorDetail(
+                        personId = personModel.id,
+                        personName = personModel.name,
+                        debtCount = personModel.debtCount,
+                        totalDebtAmount = personModel.totalDebtAmount,
+                        unpaidMonthsNames = personModel.unpaidMonthsNames
+                    )
+                }
+                val totalOverdueDebt = debtorsList.sumOf { it.totalDebtAmount }
+
+                val monthlyReportsList = categoryPayments
+                    .groupBy { Pair(it.shamsiYear, it.shamsiMonth) }
+                    .entries
+                    .sortedWith(compareByDescending<Map.Entry<Pair<Int, Int>, List<PaymentRecord>>> { it.key.first }.thenByDescending { it.key.second })
+                    .map { (yearMonth, paymentGroup) ->
+                        val (year, month) = yearMonth
+                        val totalAmount = paymentGroup.sumOf { it.amount }
+                        val payerNames = paymentGroup.mapNotNull { payment ->
+                            personsMap[payment.personId]?.let { person ->
+                                if (person.isAnonymous && category == "mosque") "خیر ناشناس (${person.name})" else person.name
+                            }
+                        }.distinct()
+
+                        MonthlyFinancialReport(
+                            year = year,
+                            month = month,
+                            monthName = getPersianMonthName(month),
+                            totalAmount = totalAmount,
+                            paymentCount = paymentGroup.size,
+                            payerNames = payerNames
+                        )
+                    }
+
+                _financialReportData.value = FinancialReportData(
+                    totalAllTimeIncome = totalAllTimeIncome,
+                    totalOverdueDebt = totalOverdueDebt,
+                    totalDebtorsCount = debtorsList.size,
+                    debtors = debtorsList,
+                    monthlyReports = monthlyReportsList
+                )
 
                 val filteredPaid = if (query.isBlank()) paidModels else paidModels.filter { it.name.contains(query, ignoreCase = true) }
                 val filteredUnpaid = if (query.isBlank()) unpaidModels else unpaidModels.filter { it.name.contains(query, ignoreCase = true) }
@@ -269,6 +336,8 @@ class PersonViewModel @Inject constructor(
     fun onDismissAddPersonDialog() { _showAddPersonDialog.value = false }
     fun onQuickPayClicked(person: PersonUiModel) { _personForPaymentDialog.value = person }
     fun onDismissPaymentDialog() { _personForPaymentDialog.value = null }
+    fun onShowFinancialReport() { _showFinancialReportDialog.value = true }
+    fun onDismissFinancialReport() { _showFinancialReportDialog.value = false }
 
     fun onEvent(event: PersonScreenEvent) {
         viewModelScope.launch {
@@ -291,9 +360,9 @@ class PersonViewModel @Inject constructor(
                         val persons = localPersonRepository.getAllPersonsFlow().first()
                         val finalName = if (event.isAnonymous && event.name.isBlank()) "ناشناس" else event.name
                         
-                        val isDuplicate = if (!event.isAnonymous) {
-                            persons.any { it.category == _currentCategory.value && it.name.trim().equals(finalName.trim(), ignoreCase = true) }
-                        } else false
+                        val isDuplicate = !event.isAnonymous && persons.any {
+                            it.category == _currentCategory.value && it.name.trim().equals(finalName.trim(), ignoreCase = true)
+                        }
                         
                         if (isDuplicate) {
                             _toastMessage.emit("خطا: این نام از قبل وجود دارد.")
@@ -334,8 +403,9 @@ class PersonViewModel @Inject constructor(
                     val currentDay = getCurrentShamsiDay()
                     val currentMonth = getCurrentShamsiMonth()
                     val currentYear = getCurrentShamsiYear()
-                    val targetMonth = if (currentDay >= 20) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1
-                    val targetYear = if (currentDay < 20 && currentMonth == 1) currentYear - 1 else currentYear
+                    val isMosque = _currentCategory.value == "mosque"
+                    val targetMonth = if (isMosque) currentMonth else (if (currentDay >= 20) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1)
+                    val targetYear = if (isMosque) currentYear else (if (currentDay < 20 && currentMonth == 1) currentYear - 1 else currentYear)
 
                     val record = createPaymentRecord(event.personId, targetMonth, targetYear, event.amount, event.description)
                         .copy(category = _currentCategory.value)

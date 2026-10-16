@@ -3,6 +3,7 @@ package com.oqba26.monthlypaymentapp.data.repository
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -26,6 +27,8 @@ class SettingsRepository(context: Context) {
         val REMINDER_DAY = stringPreferencesKey("reminder_day")
         val CARD_NUMBERS = stringPreferencesKey("card_numbers")
         val IGNORED_CONTACT_SUGGESTIONS = stringPreferencesKey("ignored_contact_suggestions")
+        val IS_OPERATOR_MODE = booleanPreferencesKey("is_operator_mode")
+        val ADMIN_PIN = stringPreferencesKey("admin_pin")
 
         /** آخرین versionCodeی که با آن اجرا شده — مبنای تشخیص ارتقای نسخه برای گرفتن snapshot. */
         val LAST_RUN_VERSION_CODE = intPreferencesKey("last_run_version_code")
@@ -115,5 +118,21 @@ class SettingsRepository(context: Context) {
             set.add(personId)
             preferences[IGNORED_CONTACT_SUGGESTIONS] = set.joinToString(",")
         }
+    }
+
+    val isOperatorModeFlow: Flow<Boolean> = dataStore.data.map {
+        it[IS_OPERATOR_MODE] ?: false
+    }
+
+    val adminPinFlow: Flow<String> = dataStore.data.map {
+        it[ADMIN_PIN] ?: "1234"
+    }
+
+    suspend fun setOperatorMode(isOperator: Boolean) {
+        dataStore.edit { it[IS_OPERATOR_MODE] = isOperator }
+    }
+
+    suspend fun setAdminPin(pin: String) {
+        dataStore.edit { it[ADMIN_PIN] = pin }
     }
 }

@@ -1,7 +1,7 @@
 {
-  "versionCode": 8,
-  "versionName": "1.0.7",
-  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.0.7/MonthlyPaymentApp-v1.0.7.apk",
-  "releaseNotes": "مهاجرت به PocketBase، رفع خطاهای بیلد و بهبود پایداری همگام‌سازی",
+  "versionCode": 9,
+  "versionName": "1.0.8",
+  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.0.8/MonthlyPaymentApp-v1.0.8.apk",
+  "releaseNotes": "بهبودهای تب مسجد و افزودن حالت اپراتور (محدودسازی دسترسی)",
   "isForceUpdate": false
 }

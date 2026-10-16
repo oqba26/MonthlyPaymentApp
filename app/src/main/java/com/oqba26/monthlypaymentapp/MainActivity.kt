@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Paid
@@ -457,18 +458,34 @@ fun AuthenticatedContent(viewModel: PersonViewModel, contactViewModel: ContactVi
                         IconButton(onClick = { showConfirmMoveDialog = true }) {
                             Icon(Icons.Default.Check, contentDescription = "Confirm Move", tint = Color.Green)
                         }
-                    } else if (currentRoute == Screen.Unpaid.route || currentRoute == Screen.Mosque.route) {
-                        FilledIconButton(
-                            onClick = { viewModel.onAddPersonClicked() },
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "افزودن شخص")
+                    } else if (currentRoute == Screen.Unpaid.route || currentRoute == Screen.Paid.route || currentRoute == Screen.Mosque.route) {
+                        if (currentRoute == Screen.Unpaid.route || currentRoute == Screen.Mosque.route) {
+                            FilledIconButton(
+                                onClick = { viewModel.onAddPersonClicked() },
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "افزودن شخص")
+                            }
+                            FilledIconButton(
+                                onClick = { contactViewModel.onBulkSmsClicked() },
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = Color.White
+                                ),
+                                modifier = Modifier.padding(start = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Message,
+                                    contentDescription = "Bulk SMS",
+                                    modifier = Modifier.graphicsLayer(scaleX = -1f)
+                                )
+                            }
                         }
                         FilledIconButton(
-                            onClick = { contactViewModel.onBulkSmsClicked() },
+                            onClick = { viewModel.onShowFinancialReport() },
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                                 contentColor = Color.White
@@ -476,9 +493,8 @@ fun AuthenticatedContent(viewModel: PersonViewModel, contactViewModel: ContactVi
                             modifier = Modifier.padding(start = 4.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Message,
-                                contentDescription = "Bulk SMS",
-                                modifier = Modifier.graphicsLayer(scaleX = -1f)
+                                imageVector = Icons.Default.Assessment,
+                                contentDescription = "گزارشات مالی"
                             )
                         }
                     }

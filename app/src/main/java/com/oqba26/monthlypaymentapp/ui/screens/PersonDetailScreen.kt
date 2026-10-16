@@ -124,18 +124,20 @@ fun PersonDetailScreen(
 
             Spacer(modifier = Modifier.height(4.dp))
 
+            val isMosque = detailState.person?.category == "mosque"
             LazyColumn(modifier = Modifier.fillMaxSize().padding(bottom = 8.dp)) {
                 items(detailState.monthStates) { monthModel ->
                     MonthListItem(
                         month = monthModel,
                         startMonth = detailState.person?.startMonth ?: 1,
+                        isMosqueCategory = isMosque,
                         onHeaderClick = {
                             expandedMonth = if (expandedMonth == monthModel.month) null else monthModel.month
                         },
                         onEditClick = {
                             if (monthModel.status == MonthStatus.PAID) {
                                 editingPayment = monthModel.payment
-                            } else if (monthModel.status == MonthStatus.AVAILABLE) {
+                            } else {
                                 addingPaymentMonth = monthModel.month
                             }
                         }
@@ -170,8 +172,11 @@ fun PersonDetailScreen(
         val monthName = getPersianMonthName(month)
         val currentDateTime = formatTimestampToPersianDateTime(System.currentTimeMillis())
         
+        val isMosque = detailState.person?.category == "mosque"
         val isCurrentMonth = (month == getCurrentShamsiMonth()) && (detailState.selectedYear == getCurrentShamsiYear())
-        val initialDesc = if (isCurrentMonth) {
+        val initialDesc = if (isMosque) {
+            "پرداخت کمک به مسجد در تاریخ $currentDateTime ثبت شد."
+        } else if (isCurrentMonth) {
             "پرداخت برای ماه جاری در تاریخ $currentDateTime ثبت شد."
         } else {
             "پرداخت برای $monthName در تاریخ $currentDateTime ثبت شد."
@@ -600,6 +605,7 @@ fun YearSelector(year: Int, onYearChange: (Int) -> Unit) {
 fun MonthListItem(
     month: MonthUiModel,
     startMonth: Int,
+    isMosqueCategory: Boolean = false,
     onHeaderClick: () -> Unit,
     onEditClick: () -> Unit
 ) {
@@ -607,7 +613,7 @@ fun MonthListItem(
     val containerColor = when (month.status) {
         MonthStatus.PAID -> MaterialTheme.colorScheme.primaryContainer
         MonthStatus.AVAILABLE -> MaterialTheme.colorScheme.surface
-        MonthStatus.NOT_COMMITTED -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        MonthStatus.NOT_COMMITTED -> if (isMosqueCategory) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
 
@@ -616,19 +622,27 @@ fun MonthListItem(
             .padding(horizontal = 16.dp, vertical = 4.dp)
             .fillMaxWidth()
             .clickable {
-                if (month.status == MonthStatus.NOT_COMMITTED) {
-                    val monthName = getPersianMonthName(startMonth)
-                    Toast.makeText(
-                        context,
-                        "ماه‌های قبل از $monthName ماه جزو تعهدات این فرد نیست",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                if (month.status == MonthStatus.PAID) {
+                    onHeaderClick()
+                } else if (month.status == MonthStatus.AVAILABLE) {
+                    onEditClick()
+                } else if (month.status == MonthStatus.NOT_COMMITTED) {
+                    if (isMosqueCategory) {
+                        onEditClick()
+                    } else {
+                        val monthName = getPersianMonthName(startMonth)
+                        Toast.makeText(
+                            context,
+                            "ماه‌های قبل از $monthName ماه جزو تعهدات این فرد نیست",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 } else {
                     onHeaderClick()
                 }
             },
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (month.status == MonthStatus.NOT_COMMITTED) 0.dp else 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (month.status == MonthStatus.NOT_COMMITTED && !isMosqueCategory) 0.dp else 1.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)) {
             Row(
@@ -641,7 +655,7 @@ fun MonthListItem(
                         text = getPersianMonthName(month.month),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (month.status == MonthStatus.NOT_COMMITTED) Color.Gray else Color.Unspecified
+                        color = if (month.status == MonthStatus.NOT_COMMITTED && !isMosqueCategory) Color.Gray else Color.Unspecified
                     )
                     if ((month.status == MonthStatus.PAID) && (month.payment != null)) {
                         Spacer(modifier = Modifier.width(8.dp))

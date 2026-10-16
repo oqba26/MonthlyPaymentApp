@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +20,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -148,6 +153,16 @@ fun SettingsScreen(onLogout: () -> Unit) {
             onSave = { viewModel.saveDefaultPaymentAmount(it) }
         )
 
+        val isOperatorMode by viewModel.isOperatorMode.collectAsState()
+        val adminPin by viewModel.adminPin.collectAsState()
+
+        OperatorModeSetting(
+            isOperatorMode = isOperatorMode,
+            adminPin = adminPin,
+            onToggleMode = { viewModel.setOperatorMode(it) },
+            onChangePin = { viewModel.setAdminPin(it) }
+        )
+
         Spacer(Modifier.weight(1f))
 
         val reminderDay by viewModel.reminderDay.collectAsState()
@@ -161,6 +176,7 @@ fun SettingsScreen(onLogout: () -> Unit) {
         val cardNumbers by viewModel.cardNumbers.collectAsState()
         CardNumbersSetting(
             cardNumbers = cardNumbers,
+            isOperatorMode = isOperatorMode,
             onAdd = { viewModel.addCardNumber(it) },
             onRemove = { viewModel.removeCardNumber(it) }
         )
@@ -172,44 +188,46 @@ fun SettingsScreen(onLogout: () -> Unit) {
             onFontSelected = { viewModel.onFontSelected(it) }
         )
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+        if (!isOperatorMode) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-        Text(
-            "پشتیبان‌گیری و بازیابی",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+            Text(
+                "پشتیبان‌گیری و بازیابی",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        val simpleDateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault())
+                        val fileName = "payment_backup_${simpleDateFormat.format(Date())}.json"
+                        backupLauncher.launch(fileName)
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("تهیه پشتیبان", fontSize = 13.sp)
+                }
+
+                OutlinedButton(
+                    onClick = { restoreLauncher.launch(arrayOf("application/json")) },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("بازیابی فایل", fontSize = 13.sp)
+                }
+            }
+
+            // تور نجات: نسخه‌هایی که خودِ برنامه قبل از عملیات پرخطر گرفته است.
             OutlinedButton(
                 onClick = {
-                    val simpleDateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.getDefault())
-                    val fileName = "payment_backup_${simpleDateFormat.format(Date())}.json"
-                    backupLauncher.launch(fileName)
+                    viewModel.loadSnapshots()
+                    showSnapshotDialog = true
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
             ) {
-                Text("تهیه پشتیبان", fontSize = 13.sp)
+                Text(stringResource(R.string.auto_backup_button), fontSize = 13.sp)
             }
-
-            OutlinedButton(
-                onClick = { restoreLauncher.launch(arrayOf("application/json")) },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-            ) {
-                Text("بازیابی فایل", fontSize = 13.sp)
-            }
-        }
-
-        // تور نجات: نسخه‌هایی که خودِ برنامه قبل از عملیات پرخطر گرفته است.
-        OutlinedButton(
-            onClick = {
-                viewModel.loadSnapshots()
-                showSnapshotDialog = true
-            },
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-        ) {
-            Text(stringResource(R.string.auto_backup_button), fontSize = 13.sp)
         }
 
         Spacer(Modifier.weight(1f))
@@ -505,10 +523,17 @@ fun ReminderDaySetting(currentDay: Int?, onSave: (String) -> Unit) {
 }
 
 @Composable
-fun CardNumbersSetting(cardNumbers: List<String>, onAdd: (String) -> Unit, onRemove: (String) -> Unit) {
+fun CardNumbersSetting(
+    cardNumbers: List<String>,
+    isOperatorMode: Boolean = false,
+    onAdd: (String) -> Unit,
+    onRemove: (String) -> Unit
+) {
     var isAdding by remember { mutableStateOf(false) }
     var newCardText by remember { mutableStateOf("") }
     var cardToRemove by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -517,9 +542,11 @@ fun CardNumbersSetting(cardNumbers: List<String>, onAdd: (String) -> Unit, onRem
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("شماره کارت‌های بانکی", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                IconButton(onClick = { isAdding = true }) { Icon(Icons.Default.Add, null) }
+                if (!isOperatorMode) {
+                    IconButton(onClick = { isAdding = true }) { Icon(Icons.Default.Add, null) }
+                }
             }
-            if (isAdding) {
+            if (isAdding && !isOperatorMode) {
                 OutlinedTextField(
                     value = newCardText,
                     onValueChange = { newCardText = it.filter { c -> c.isDigit() } },
@@ -534,9 +561,33 @@ fun CardNumbersSetting(cardNumbers: List<String>, onAdd: (String) -> Unit, onRem
                 }
             }
             cardNumbers.forEach { card ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(card.toPersianDigits(), modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
-                    IconButton(onClick = { cardToRemove = card }) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            clipboardManager.setText(AnnotatedString(card))
+                            Toast.makeText(context, "شماره کارت کپی شد", Toast.LENGTH_SHORT).show()
+                        }
+                        .padding(vertical = 4.dp)
+                ) {
+                    Text(
+                        card.toPersianDigits(),
+                        modifier = Modifier.weight(1f),
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    IconButton(onClick = {
+                        clipboardManager.setText(AnnotatedString(card))
+                        Toast.makeText(context, "شماره کارت کپی شد", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "کپی شماره کارت")
+                    }
+                    if (!isOperatorMode) {
+                        IconButton(onClick = { cardToRemove = card }) {
+                            Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                        }
+                    }
                 }
             }
         }
@@ -554,6 +605,147 @@ fun CardNumbersSetting(cardNumbers: List<String>, onAdd: (String) -> Unit, onRem
         )
     }
 }
+
+@Composable
+fun OperatorModeSetting(
+    isOperatorMode: Boolean,
+    adminPin: String,
+    onToggleMode: (Boolean) -> Unit,
+    onChangePin: (String) -> Unit
+) {
+    var showPinDialog by remember { mutableStateOf(false) }
+    var pinAction by remember { mutableStateOf<PinAction?>(null) }
+    var enteredPin by remember { mutableStateOf("") }
+    var newPinInput by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isOperatorMode) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("حالت دسترسی برنامه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (isOperatorMode) "وضعیت فعلی: حالت اپراتور (محدود)" else "وضعیت فعلی: حالت مدیریت (کامل)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isOperatorMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                if (isOperatorMode) {
+                    Button(
+                        onClick = {
+                            pinAction = PinAction.UNLOCK_ADMIN
+                            enteredPin = ""
+                            errorMessage = ""
+                            showPinDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("خروج از حالت اپراتور")
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            onToggleMode(true)
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("فعال‌سازی حالت اپراتور")
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            pinAction = PinAction.CHANGE_PIN
+                            enteredPin = ""
+                            newPinInput = ""
+                            errorMessage = ""
+                            showPinDialog = true
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("تغییر رمز مدیر")
+                    }
+                }
+            }
+        }
+    }
+
+    if (showPinDialog) {
+        Dialog(onDismissRequest = { showPinDialog = false }) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Card(modifier = Modifier.fillMaxWidth().padding(16.dp), shape = RoundedCornerShape(16.dp)) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            if (pinAction == PinAction.UNLOCK_ADMIN) "ورود رمز مدیریت" else "تغییر رمز مدیریت",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        if (pinAction == PinAction.UNLOCK_ADMIN || pinAction == PinAction.CHANGE_PIN) {
+                            OutlinedTextField(
+                                value = enteredPin,
+                                onValueChange = { enteredPin = it.filter { c -> c.isDigit() } },
+                                label = { Text(if (pinAction == PinAction.CHANGE_PIN) "رمز فعلی" else "رمز عبور مدیر") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                                visualTransformation = PasswordVisualTransformation(),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        if (pinAction == PinAction.CHANGE_PIN) {
+                            OutlinedTextField(
+                                value = newPinInput,
+                                onValueChange = { newPinInput = it.filter { c -> c.isDigit() } },
+                                label = { Text("رمز جدید") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                                visualTransformation = PasswordVisualTransformation(),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        if (errorMessage.isNotBlank()) {
+                            Text(errorMessage, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+
+                        Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                            TextButton(onClick = { showPinDialog = false }) { Text("لغو") }
+                            Button(onClick = {
+                                if (pinAction == PinAction.UNLOCK_ADMIN) {
+                                    if (enteredPin == adminPin) {
+                                        onToggleMode(false)
+                                        showPinDialog = false
+                                    } else {
+                                        errorMessage = "رمز عبور اشتباه است"
+                                    }
+                                } else if (pinAction == PinAction.CHANGE_PIN) {
+                                    if (enteredPin != adminPin) {
+                                        errorMessage = "رمز فعلی اشتباه است"
+                                    } else if (newPinInput.length < 4) {
+                                        errorMessage = "رمز جدید باید حداقل ۴ رقم باشد"
+                                    } else {
+                                        onChangePin(newPinInput)
+                                        showPinDialog = false
+                                    }
+                                }
+                            }) { Text("تأیید") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private enum class PinAction { UNLOCK_ADMIN, CHANGE_PIN }
 
 @Composable
 fun FontSelectionDropdown(selectedFont: String, onFontSelected: (String) -> Unit) {
