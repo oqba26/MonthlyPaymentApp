@@ -1,7 +1,7 @@
 {
-  "versionCode": 9,
-  "versionName": "1.0.8",
-  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.0.8/MonthlyPaymentApp-v1.0.8.apk",
-  "releaseNotes": "بهبودهای تب مسجد و افزودن حالت اپراتور (محدودسازی دسترسی)",
+  "versionCode": 10,
+  "versionName": "1.0.9",
+  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.0.9/MonthlyPaymentApp-v1.0.9.apk",
+  "releaseNotes": "اصلاح اسکرول صفحه تنظیمات، بهبود ظاهری کارت حالت دسترسی و انتقال لیست اسامی بدهکاران به گزارش مالی",
   "isForceUpdate": false
 }

@@ -5,24 +5,32 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -136,16 +144,18 @@ fun SettingsScreen(onLogout: () -> Unit) {
         }
     )
 
+    val scrollState = rememberScrollState()
+
     Column(
         modifier = Modifier
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .fillMaxWidth()
-            .fillMaxHeight()
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
             stringResource(R.string.settings),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
+            style = MaterialTheme.typography.titleMedium
         )
 
         DefaultAmountSetting(
@@ -163,15 +173,11 @@ fun SettingsScreen(onLogout: () -> Unit) {
             onChangePin = { viewModel.setAdminPin(it) }
         )
 
-        Spacer(Modifier.weight(1f))
-
         val reminderDay by viewModel.reminderDay.collectAsState()
         ReminderDaySetting(
             currentDay = reminderDay,
             onSave = { viewModel.saveReminderDay(it) }
         )
-
-        Spacer(Modifier.weight(1f))
 
         val cardNumbers by viewModel.cardNumbers.collectAsState()
         CardNumbersSetting(
@@ -181,20 +187,17 @@ fun SettingsScreen(onLogout: () -> Unit) {
             onRemove = { viewModel.removeCardNumber(it) }
         )
 
-        Spacer(Modifier.weight(1f))
-
         FontSelectionDropdown(
             selectedFont = selectedFont,
             onFontSelected = { viewModel.onFontSelected(it) }
         )
 
         if (!isOperatorMode) {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             Text(
                 "پشتیبان‌گیری و بازیابی",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 8.dp)
+                style = MaterialTheme.typography.titleMedium
             )
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -224,24 +227,26 @@ fun SettingsScreen(onLogout: () -> Unit) {
                     viewModel.loadSnapshots()
                     showSnapshotDialog = true
                 },
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text(stringResource(R.string.auto_backup_button), fontSize = 13.sp)
             }
         }
 
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(8.dp))
 
         Button(
             onClick = onLogout,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)
+            contentPadding = PaddingValues(vertical = 12.dp)
         ) {
             Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.logout))
         }
+
+        Spacer(Modifier.height(16.dp))
     }
 
     if (showSnapshotDialog) {
@@ -621,43 +626,71 @@ fun OperatorModeSetting(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isOperatorMode) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+            containerColor = if (isOperatorMode) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         )
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("حالت دسترسی برنامه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(
-                        if (isOperatorMode) "وضعیت فعلی: حالت اپراتور (محدود)" else "وضعیت فعلی: حالت مدیریت (کامل)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isOperatorMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (isOperatorMode) Icons.Default.Lock else Icons.Default.AdminPanelSettings,
+                        contentDescription = null,
+                        tint = if (isOperatorMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "حالت دسترسی برنامه",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = if (isOperatorMode) "وضعیت فعلی: حالت اپراتور (محدود)" else "وضعیت فعلی: حالت مدیریت (کامل)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isOperatorMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                if (isOperatorMode) {
+            HorizontalDivider(thickness = 0.5.dp)
+
+            if (isOperatorMode) {
+                Button(
+                    onClick = {
+                        pinAction = PinAction.UNLOCK_ADMIN
+                        enteredPin = ""
+                        errorMessage = ""
+                        showPinDialog = true
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Default.LockOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("خروج از حالت اپراتور (ورود رمز مدیر)")
+                }
+            } else {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Button(
-                        onClick = {
-                            pinAction = PinAction.UNLOCK_ADMIN
-                            enteredPin = ""
-                            errorMessage = ""
-                            showPinDialog = true
-                        },
-                        modifier = Modifier.fillMaxWidth()
+                        onClick = { onToggleMode(true) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("خروج از حالت اپراتور")
-                    }
-                } else {
-                    Button(
-                        onClick = {
-                            onToggleMode(true)
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("فعال‌سازی حالت اپراتور")
+                        Text("فعال‌سازی حالت اپراتور", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                     }
 
                     OutlinedButton(
@@ -668,9 +701,10 @@ fun OperatorModeSetting(
                             errorMessage = ""
                             showPinDialog = true
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("تغییر رمز مدیر")
+                        Text("تغییر رمز مدیر", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                     }
                 }
             }

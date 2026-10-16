@@ -1117,39 +1117,22 @@ fun DashboardCard(
             if (financialReportData.totalOverdueDebt > 0 || financialReportData.debtors.isNotEmpty()) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
 
-                Column(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "🔴 مجموع بدهی‌های معوقه:",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        Text(
-                            text = "${formatNumberAsPersian(financialReportData.totalOverdueDebt)} تومان",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-
-                    val debtorNamesText = financialReportData.debtors.joinToString("، ") { 
-                        "${it.personName} (${formatNumberAsPersian(it.totalDebtAmount)})" 
-                    }
-
                     Text(
-                        text = "بدهکاران (${financialReportData.totalDebtorsCount.toString().toPersianDigits()} نفر): $debtorNamesText",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
+                        text = "🔴 مجموع بدهی‌های معوقه:",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        text = "${formatNumberAsPersian(financialReportData.totalOverdueDebt)} تومان",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }
@@ -1233,6 +1216,34 @@ fun FinancialReportDialog(
                             ) {
                                 Text("🔴 کل بدهی‌های معوقه فعلی:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
                                 Text("${formatNumberAsPersian(data.totalOverdueDebt)} تومان (${data.totalDebtorsCount.toString().toPersianDigits()} نفر)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+
+                    if (data.debtors.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f))
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "لیست بدهکاران (${data.totalDebtorsCount.toString().toPersianDigits()} نفر):",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                val debtorNamesText = data.debtors.joinToString("، ") { 
+                                    "${it.personName} (${formatNumberAsPersian(it.totalDebtAmount)})" 
+                                }
+                                Text(
+                                    text = debtorNamesText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
