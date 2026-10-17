@@ -1168,7 +1168,7 @@ fun FinancialReportDialog(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 600.dp),
+                    .heightIn(max = 650.dp),
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
@@ -1195,84 +1195,90 @@ fun FinancialReportDialog(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Card(
+                    LazyColumn(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(
+                        item {
+                            Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
                             ) {
-                                Text("💰 کل درآمدهای تمام زمان‌ها:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                Text("${formatNumberAsPersian(data.totalAllTimeIncome)} تومان", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("🔴 کل بدهی‌های معوقه فعلی:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
-                                Text("${formatNumberAsPersian(data.totalOverdueDebt)} تومان (${data.totalDebtorsCount.toString().toPersianDigits()} نفر)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    }
-
-                    if (data.debtors.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    text = "لیست بدهکاران (${data.totalDebtorsCount.toString().toPersianDigits()} نفر):",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                val debtorNamesText = data.debtors.joinToString("، ") { 
-                                    "${it.personName} (${formatNumberAsPersian(it.totalDebtAmount)})" 
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("💰 کل درآمدهای تمام زمان‌ها:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                        Text("${formatNumberAsPersian(data.totalAllTimeIncome)} تومان", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("🔴 کل بدهی‌های معوقه فعلی:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                                        Text("${formatNumberAsPersian(data.totalOverdueDebt)} تومان (${data.totalDebtorsCount.toString().toPersianDigits()} نفر)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                                    }
                                 }
+                            }
+                        }
+
+                        if (data.debtors.isNotEmpty()) {
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f))
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "لیست بدهکاران (${data.totalDebtorsCount.toString().toPersianDigits()} نفر):",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                        val debtorNamesText = data.debtors.joinToString("، ") { 
+                                            "${it.personName} (${formatNumberAsPersian(it.totalDebtAmount)})" 
+                                        }
+                                        Text(
+                                            text = debtorNamesText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        item {
+                            Column {
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                                 Text(
-                                    text = debtorNamesText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = "تفکیک درآمد ماهانه ماه‌های گذشته",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 4.dp)
                                 )
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "تفکیک درآمد ماهانه ماه‌های گذشته",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    if (data.monthlyReports.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("هیچ دریافتی تا کنون ثبت نشده است.", style = MaterialTheme.typography.bodyMedium)
-                        }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
+                        if (data.monthlyReports.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("هیچ دریافتی تا کنون ثبت نشده است.", style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        } else {
                             items(data.monthlyReports) { report ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
@@ -1318,15 +1324,6 @@ fun FinancialReportDialog(
                                 }
                             }
                         }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("بستن")
                     }
                 }
             }
