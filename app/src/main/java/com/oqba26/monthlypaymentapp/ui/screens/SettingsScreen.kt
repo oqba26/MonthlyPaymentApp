@@ -46,6 +46,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -633,7 +634,7 @@ fun OperatorModeSetting(
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -648,18 +649,24 @@ fun OperatorModeSetting(
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(
-                            text = "حالت دسترسی برنامه",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = if (isOperatorMode) "وضعیت فعلی: حالت اپراتور (محدود)" else "وضعیت فعلی: حالت مدیریت (کامل)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isOperatorMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Text(
+                        text = "حالت دسترسی برنامه",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Surface(
+                    color = if (isOperatorMode) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = if (isOperatorMode) "اپراتور (محدود)" else "مدیریت (کامل)",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isOperatorMode) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
             }
 
@@ -674,38 +681,51 @@ fun OperatorModeSetting(
                         showPinDialog = true
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Icon(Icons.Default.LockOpen, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("خروج از حالت اپراتور (ورود رمز مدیر)")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("خروج از حالت اپراتور (ورود رمز مدیر)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 }
             } else {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                OutlinedButton(
+                    onClick = { onToggleMode(true) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
                 ) {
-                    Button(
-                        onClick = { onToggleMode(true) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("فعال‌سازی حالت اپراتور", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                    }
+                    Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("فعال‌سازی حالت اپراتور (محدودسازی)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                }
 
-                    OutlinedButton(
-                        onClick = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
                             pinAction = PinAction.CHANGE_PIN
                             enteredPin = ""
                             newPinInput = ""
                             errorMessage = ""
                             showPinDialog = true
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("تغییر رمز مدیر", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                    }
+                        }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "تغییر رمز عبور مدیریت",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
