@@ -14,9 +14,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
 
 class NetworkRepository(
-    private val settingsRepository: SettingsRepository? = null
+    settingsRepository: SettingsRepository? = null
 ) {
 
     private val pocketBase = ApiClient.pocketBase
@@ -43,13 +44,16 @@ class NetworkRepository(
     // --- Realtime Operations ---
     fun observeRealtimeChanges() {
         repositoryScope.launch {
-            try {
-                pocketBase.listenRealtime(listOf("persons", "payments")).collect { event ->
-                    Log.d("PocketBase-Realtime", "Change detected in PocketBase: $event")
-                    refresh()
+            while (true) {
+                try {
+                    pocketBase.listenRealtime(listOf("persons", "payments")).collect { event ->
+                        Log.d("PocketBase-Realtime", "Change detected in PocketBase: $event")
+                        refresh()
+                    }
+                } catch (e: Exception) {
+                    Log.e("PocketBase-Realtime", "Realtime connection error, retrying...", e)
                 }
-            } catch (e: Exception) {
-                Log.e("PocketBase-Realtime", "Realtime connection error, retrying...", e)
+                delay(3000.milliseconds)
             }
         }
     }
@@ -152,31 +156,7 @@ class NetworkRepository(
         }
     }
 
-    suspend fun updatePersonArchivedStatus(personId: String, isArchived: Boolean): Boolean {
-        return try {
-            val currentPerson = _personsFlow.value.find { it.id == personId }
-            if (currentPerson != null) {
-                pocketBase.upsertRecord("persons", "id='$personId'", currentPerson.copy(isArchived = isArchived))
-            }
-            true
-        } catch (e: Exception) {
-            Log.e("PocketBase", "updateArchived error", e)
-            false
-        }
-    }
 
-    suspend fun updatePersonDisplayOrder(personId: String, displayOrder: Long): Boolean {
-        return try {
-            val currentPerson = _personsFlow.value.find { it.id == personId }
-            if (currentPerson != null) {
-                pocketBase.upsertRecord("persons", "id='$personId'", currentPerson.copy(displayOrder = displayOrder))
-            }
-            true
-        } catch (e: Exception) {
-            Log.e("PocketBase", "updateOrder error", e)
-            false
-        }
-    }
 
     fun getPersonsFlow(): Flow<List<Person>> = _personsFlow.asStateFlow()
 
@@ -192,19 +172,17 @@ class NetworkRepository(
     }
 
     suspend fun deletePayment(paymentId: String): Boolean {
-        var retries = 0
         val maxRetries = 2
-        
-        while (retries <= maxRetries) {
+        for (retries in 1..maxRetries) {
             try {
                 pocketBase.deleteRecordByFilter("payments", "id='$paymentId'")
                 Log.d("PocketBase", "deletePayment Success: $paymentId")
                 return true
             } catch (e: Exception) {
-                retries++
                 Log.e("PocketBase", "deletePayment error (Attempt $retries): ${e.message}", e)
-                if (retries > maxRetries) return false
-                delay(1000L * retries)
+                if (retries < maxRetries) {
+                    delay((1000L * retries).milliseconds)
+                }
             }
         }
         return false

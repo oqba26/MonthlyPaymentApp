@@ -1,3 +1,5 @@
+@file:OptIn(InternalSerializationApi::class)
+
 package com.oqba26.monthlypaymentapp.data.remote
 
 import android.util.Log
@@ -5,6 +7,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -25,6 +28,7 @@ import io.ktor.utils.io.readUTF8Line
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -347,6 +351,10 @@ class PocketBaseClient(
                     authToken?.let { token ->
                         header(HttpHeaders.Authorization, "Bearer $token")
                     }
+                    timeout {
+                        requestTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
+                        socketTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
+                    }
                 }.execute { response ->
                     val channel: ByteReadChannel = response.bodyAsChannel()
                     var currentEvent = ""
@@ -362,6 +370,7 @@ class PocketBaseClient(
                                 val connectObj = json.decodeFromString<PocketBaseConnectEvent>(dataJson)
                                 subscribeRealtime(cleanBaseUrl, connectObj.clientId, subscriptions)
                                 Log.d(TAG, "اتصال ریل‌تایم برقرار شد. ClientId: ${connectObj.clientId}")
+                                emit("PB_CONNECT")
                             } else if (currentEvent.isNotEmpty()) {
                                 emit(currentEvent)
                             }

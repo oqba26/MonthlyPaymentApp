@@ -1,7 +1,7 @@
 {
-  "versionCode": 11,
-  "versionName": "1.1.0",
-  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.1.0/MonthlyPaymentApp-v1.1.0.apk",
-  "releaseNotes": "اصلاح اسکرول یکپارچه دیالوگ گزارش مالی و نمایش کامل تفکیک ماه‌های گذشته",
+  "versionCode": 12,
+  "versionName": "1.1.1",
+  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.1.1/MonthlyPaymentApp-v1.1.1.apk",
+  "releaseNotes": "بهبودهای همگام‌سازی شبکه و پایداری لایو PocketBase",
   "isForceUpdate": false
 }

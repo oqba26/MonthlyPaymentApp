@@ -30,8 +30,8 @@ android {
         applicationId = "com.oqba26.monthlypaymentapp"
         minSdk = 25
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.1.0"
+        versionCode = 12
+        versionName = "1.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -76,7 +76,13 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
         isCoreLibraryDesugaringEnabled = true
     }
-    kotlinOptions { jvmTarget = "21" }
+    kotlinOptions {
+        jvmTarget = "21"
+        freeCompilerArgs += listOf(
+            "-opt-in=kotlinx.serialization.InternalSerializationApi",
+            "-opt-in=kotlinx.serialization.ExperimentalSerializationApi"
+        )
+    }
     kotlin { jvmToolchain(21) }
 
     packaging {
