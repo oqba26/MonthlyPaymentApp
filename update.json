@@ -1,7 +1,7 @@
 {
-  "versionCode": 12,
-  "versionName": "1.1.1",
-  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.1.1/MonthlyPaymentApp-v1.1.1.apk",
-  "releaseNotes": "بهبودهای همگام‌سازی شبکه و پایداری لایو PocketBase",
+  "versionCode": 13,
+  "versionName": "1.1.2",
+  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.1.2/MonthlyPaymentApp-v1.1.2.apk",
+  "releaseNotes": "بهبودهای پایداری و عملکرد همگام‌سازی",
   "isForceUpdate": false
 }

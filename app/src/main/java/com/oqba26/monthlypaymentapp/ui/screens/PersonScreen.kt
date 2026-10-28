@@ -30,7 +30,6 @@ import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Sync
@@ -117,7 +116,6 @@ fun PersonScreen(
     val dashboardData by viewModel.dashboardData.collectAsState()
     val financialReportData by viewModel.financialReportData.collectAsState()
     val showFinancialReportDialog by viewModel.showFinancialReportDialog.collectAsState()
-    val isOperatorMode by viewModel.isOperatorMode.collectAsState()
     val defaultPaymentAmount by viewModel.defaultPaymentAmountFlow.collectAsState(initial = 0.0)
     val cardNumbers by viewModel.cardNumbersFlow.collectAsState(initial = emptyList())
     val personForPaymentDialog by viewModel.personForPaymentDialog.collectAsState()
@@ -188,8 +186,7 @@ fun PersonScreen(
                 DashboardCard(
                     data = dashboardData,
                     financialReportData = financialReportData,
-                    isOperatorMode = isOperatorMode,
-                    onOpenReportClick = { viewModel.onShowFinancialReport() }
+                    isMosqueCategory = (currentCategory == "mosque")
                 )
 
                 OutlinedTextField(
@@ -582,7 +579,7 @@ fun AddNewPersonDialog(
     val currentShamsiYear = getCurrentShamsiYear()
     val currentShamsiMonth = getCurrentShamsiMonth()
     
-    var startMonth by remember { mutableIntStateOf(currentShamsiMonth) }
+    var startMonth by remember { mutableIntStateOf(if (isMosqueCategory) currentShamsiMonth else 1) }
     var startYear by remember { mutableIntStateOf(currentShamsiYear) }
     
     var similarContacts by remember { mutableStateOf<List<ContactMatch>>(emptyList()) }
@@ -1072,8 +1069,7 @@ fun SelectCardDialog(
 fun DashboardCard(
     data: DashboardUiModel,
     financialReportData: FinancialReportData,
-    isOperatorMode: Boolean = false,
-    onOpenReportClick: () -> Unit
+    isMosqueCategory: Boolean = false
 ) {
     val animatedProgress by animateFloatAsState(
         targetValue = data.progress,
@@ -1110,7 +1106,11 @@ fun DashboardCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("مجموع درآمد ماه جاری", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    text = if (isMosqueCategory) "کمک‌های جمع‌آوری شده ماه جاری" else "حقوق جمع‌آوری شده ماه جاری",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
                 Text("${formatNumberAsPersian(data.totalIncome)} تومان", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
             }
 
@@ -1134,24 +1134,6 @@ fun DashboardCard(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.error
                     )
-                }
-            }
-
-            if (!isOperatorMode) {
-                OutlinedButton(
-                    onClick = onOpenReportClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 2.dp),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Assessment,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("مشاهده گزارش کامل مالی و درآمدهای گذشته", style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
