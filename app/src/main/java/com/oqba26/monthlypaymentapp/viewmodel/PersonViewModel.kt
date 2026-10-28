@@ -14,6 +14,7 @@ import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiDay
 import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiMonth
 import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiYear
 import com.oqba26.monthlypaymentapp.utils.getPersianMonthName
+import com.oqba26.monthlypaymentapp.utils.isTimestampInCurrentCycle
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.coroutineScope
@@ -68,9 +69,6 @@ class PersonViewModel @Inject constructor(
 
     private val _infoMessage = MutableSharedFlow<String>()
     val infoMessage = _infoMessage.asSharedFlow()
-
-    val isOperatorMode: StateFlow<Boolean> = settingsRepository.isOperatorModeFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), false)
 
     private val _uiState = MutableStateFlow(PersonListUiState())
     val uiState: StateFlow<PersonListUiState> = _uiState.asStateFlow()
@@ -248,13 +246,13 @@ class PersonViewModel @Inject constructor(
                     )
                 }
 
-                updateDashboard(uiModels.size, relevantPayments)
+                val categoryPayments = allPayments.filter { it.category == category }
+                updateDashboard(uiModels.size, relevantPayments, categoryPayments)
 
                 val (paidModels, unpaidModels) = uiModels.partition { it.hasPaidThisMonth }
 
                 // محاسبه گزارشات مالی جامع
                 val personsMap = persons.associateBy { it.id }
-                val categoryPayments = allPayments.filter { it.category == category }
                 val totalAllTimeIncome = categoryPayments.sumOf { it.amount }
 
                 val debtorsList = unpaidModels.filter { it.debtCount > 0 }.map { personModel ->
@@ -590,11 +588,20 @@ class PersonViewModel @Inject constructor(
         exportManager.shareReceipt(payment, personName)
     }
 
-    private fun updateDashboard(totalPersonCount: Int, paymentsThisMonth: List<PaymentRecord>) {
+    private fun updateDashboard(
+        totalPersonCount: Int,
+        paymentsThisMonth: List<PaymentRecord>,
+        categoryPayments: List<PaymentRecord>
+    ) {
         val paidCount = paymentsThisMonth.map { it.personId }.distinct().size
         val totalIncome = paymentsThisMonth.sumOf { it.amount }
+        val cyclePayments = categoryPayments.filter { payment ->
+            val time = payment.createdAt ?: payment.timestamp
+            isTimestampInCurrentCycle(time)
+        }
+        val totalCycleIncome = cyclePayments.sumOf { it.amount }
         val progress = if (totalPersonCount > 0) paidCount.toFloat() / totalPersonCount.toFloat() else 0f
-        _dashboardData.value = DashboardUiModel(paidCount, totalPersonCount, totalIncome, progress)
+        _dashboardData.value = DashboardUiModel(paidCount, totalPersonCount, totalIncome, totalCycleIncome, progress)
     }
 
     private fun createPaymentRecord(personId: String, month: Int, year: Int, amount: Double, description: String): PaymentRecord {

@@ -30,3 +30,32 @@ fun formatTimestampToPersianDateTime(timestamp: Long): String {
     val time = formatTimestampToPersianTime(timestamp)
     return "$date، ساعت $time"
 }
+
+fun isTimestampInCurrentCycle(timestamp: Long): Boolean {
+    val now = PersianDate()
+    val curYear = now.shYear
+    val curMonth = now.shMonth
+    val curDay = now.shDay
+
+    val (startYear, startMonth) = if (curDay >= 20) {
+        curYear to curMonth
+    } else {
+        if (curMonth == 1) (curYear - 1) to 12 else curYear to (curMonth - 1)
+    }
+
+    val (endYear, endMonth) = if (startMonth == 12) {
+        (startYear + 1) to 1
+    } else {
+        startYear to (startMonth + 1)
+    }
+
+    val recordDate = PersianDate(Date(timestamp))
+    val rYear = recordDate.shYear
+    val rMonth = recordDate.shMonth
+    val rDay = recordDate.shDay
+
+    val isFirstHalf = (rYear == startYear && rMonth == startMonth && rDay >= 20)
+    val isSecondHalf = (rYear == endYear && rMonth == endMonth && rDay < 20)
+
+    return isFirstHalf || isSecondHalf
+}

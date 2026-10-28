@@ -1114,6 +1114,19 @@ fun DashboardCard(
                 Text("${formatNumberAsPersian(data.totalIncome)} تومان", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
             }
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (isMosqueCategory) "مجموع کمک‌های جمع‌آوری شده دوره جاری" else "مجموع حقوق جمع‌آوری شده دوره جاری",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text("${formatNumberAsPersian(data.totalCycleIncome)} تومان", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            }
+
             if (financialReportData.totalOverdueDebt > 0 || financialReportData.debtors.isNotEmpty()) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
 

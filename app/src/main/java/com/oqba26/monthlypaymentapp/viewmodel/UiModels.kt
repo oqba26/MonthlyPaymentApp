@@ -143,6 +143,7 @@ data class DashboardUiModel(
     val paidCount: Int = 0,
     val totalCount: Int = 0,
     val totalIncome: Double = 0.0,
+    val totalCycleIncome: Double = 0.0,
     val progress: Float = 0f
 )
 
