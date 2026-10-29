@@ -113,6 +113,7 @@ fun PaidListScreen(
                                     PersonListItem(
                                         person = person,
                                         index = index + 1,
+                                        listType = PersonListType.PAID,
                                         onPersonClick = { navController.navigate("person_detail/${person.id}") },
                                         onQuickPayClick = { },
                                         onArchiveClick = { personToArchive.value = it },

@@ -31,7 +31,11 @@ fun formatTimestampToPersianDateTime(timestamp: Long): String {
     return "$date، ساعت $time"
 }
 
-fun isTimestampInCurrentCycle(timestamp: Long): Boolean {
+fun isTimestampInCurrentCycle(rawTimestamp: Long): Boolean {
+    if (rawTimestamp <= 0L) return false
+
+    val timestamp = if (rawTimestamp < 100000000000L) rawTimestamp * 1000L else rawTimestamp
+
     val now = PersianDate()
     val curYear = now.shYear
     val curMonth = now.shMonth

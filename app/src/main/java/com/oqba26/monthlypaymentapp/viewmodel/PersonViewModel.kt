@@ -198,12 +198,21 @@ class PersonViewModel @Inject constructor(
                     it.shamsiMonth == targetMonth && it.shamsiYear == targetYear && it.category == category
                 }
 
+                val categoryPayments = allPayments.filter { it.category == category }
+
                 val activePersons = persons
                     .filter { !it.isArchived && it.category == category }
                     .sortedWith(compareBy({ it.displayOrder }, { it.createdAt }))
 
                 val uiModels = activePersons.map { person ->
                     val hasPaid = relevantPayments.any { it.personId == person.id }
+
+                    val personCyclePayments = categoryPayments.filter {
+                        it.personId == person.id && isTimestampInCurrentCycle(if ((it.createdAt ?: 0L) > 0L) it.createdAt!! else it.timestamp)
+                    }
+                    val latestPayment = personCyclePayments.maxByOrNull { if ((it.createdAt ?: 0L) > 0L) it.createdAt!! else it.timestamp }
+                    val lastPaymentTime = latestPayment?.let { if ((it.createdAt ?: 0L) > 0L) it.createdAt!! else it.timestamp }
+                    val lastPaymentAmount = latestPayment?.amount
                     
                     val unpaidResult = if (category == "mosque" || person.isAnonymous) {
                         Triple(0, 0.0, emptyList<String>() to emptyList())
@@ -242,14 +251,16 @@ class PersonViewModel @Inject constructor(
                         monthlyCommitment = person.monthlyCommitment,
                         unpaidMonthsNames = unpaidMonthsNames,
                         unpaidMonths = unpaidMonths,
-                        needsSync = person.needsSync
+                        needsSync = person.needsSync,
+                        lastPaymentTime = lastPaymentTime,
+                        lastPaymentAmount = lastPaymentAmount
                     )
                 }
 
-                val categoryPayments = allPayments.filter { it.category == category }
                 updateDashboard(uiModels.size, relevantPayments, categoryPayments)
 
-                val (paidModels, unpaidModels) = uiModels.partition { it.hasPaidThisMonth }
+                val (rawPaidModels, unpaidModels) = uiModels.partition { it.hasPaidThisMonth }
+                val paidModels = rawPaidModels.sortedByDescending { it.lastPaymentTime ?: 0L }
 
                 // محاسبه گزارشات مالی جامع
                 val personsMap = persons.associateBy { it.id }
@@ -596,7 +607,7 @@ class PersonViewModel @Inject constructor(
         val paidCount = paymentsThisMonth.map { it.personId }.distinct().size
         val totalIncome = paymentsThisMonth.sumOf { it.amount }
         val cyclePayments = categoryPayments.filter { payment ->
-            val time = payment.createdAt ?: payment.timestamp
+            val time = if ((payment.createdAt ?: 0L) > 0L) payment.createdAt!! else payment.timestamp
             isTimestampInCurrentCycle(time)
         }
         val totalCycleIncome = cyclePayments.sumOf { it.amount }

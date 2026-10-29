@@ -1332,6 +1332,7 @@ fun PersonListItem(
     person: PersonUiModel,
     index: Int,
     modifier: Modifier = Modifier,
+    listType: PersonListType = PersonListType.UNPAID,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     reorderableState: org.burnoutcrew.reorderable.ReorderableLazyListState? = null,
@@ -1368,6 +1369,15 @@ fun PersonListItem(
                 )
             }
 
+            if (listType == PersonListType.PAID && person.hasPaidThisMonth) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = "Paid",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp).padding(end = 2.dp)
+                )
+            }
+
             val dragModifier = if (reorderableState != null && !isSelectionMode) {
                 Modifier.detectReorderAfterLongPress(reorderableState)
             } else Modifier
@@ -1377,14 +1387,33 @@ fun PersonListItem(
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = dragModifier.padding(end = 4.dp)
             )
-            Text(
-                person.name,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Visible
-            )
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    person.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Visible
+                )
+                if (listType == PersonListType.PAID) {
+                    person.lastPaymentTime?.let { time ->
+                        Text(
+                            text = formatTimestampToPersianDateTime(time),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    person.lastPaymentAmount?.let { amount ->
+                        Text(
+                            text = "مبلغ: ${formatNumberAsPersian(amount)} تومان",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
 
             if (person.debtCount > 0) {
                 Surface(
@@ -1420,29 +1449,31 @@ fun PersonListItem(
                 )
             }
 
-            Spacer(Modifier.width(4.dp))
+            if (listType != PersonListType.PAID) {
+                Spacer(Modifier.width(4.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (person.hasPaidThisMonth) {
-                    Icon(Icons.Filled.Check, contentDescription = "Paid", tint = MaterialTheme.colorScheme.primary)
-                } else {
-                    IconButton(onClick = { onQuickPayClick(person) }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Filled.Payments, contentDescription = "Pay", tint = MaterialTheme.colorScheme.primary)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (person.hasPaidThisMonth) {
+                        Icon(Icons.Filled.Check, contentDescription = "Paid", tint = MaterialTheme.colorScheme.primary)
+                    } else {
+                        IconButton(onClick = { onQuickPayClick(person) }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Filled.Payments, contentDescription = "Pay", tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
-                }
-                IconButton(onClick = { onArchiveClick(person) }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Filled.Archive, contentDescription = "Archive", tint = MaterialTheme.colorScheme.secondary)
-                }
-                if (person.debtCount > 0) {
-                    IconButton(onClick = { onSmsClick(person) }, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Message,
-                            contentDescription = "SMS",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier
-                                .size(20.dp)
-                                .graphicsLayer(scaleX = -1f)
-                        )
+                    IconButton(onClick = { onArchiveClick(person) }, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Filled.Archive, contentDescription = "Archive", tint = MaterialTheme.colorScheme.secondary)
+                    }
+                    if (person.debtCount > 0) {
+                        IconButton(onClick = { onSmsClick(person) }, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Message,
+                                contentDescription = "SMS",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .graphicsLayer(scaleX = -1f)
+                            )
+                        }
                     }
                 }
             }

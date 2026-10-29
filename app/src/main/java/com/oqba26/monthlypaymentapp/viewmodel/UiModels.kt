@@ -17,6 +17,8 @@ data class PersonUiModel(
     val unpaidMonthsNames: List<String> = emptyList(),
     val unpaidMonths: List<Int> = emptyList(),
     val needsSync: Boolean = false,
+    val lastPaymentTime: Long? = null,
+    val lastPaymentAmount: Double? = null
 )
 
 data class PersonListUiState(
