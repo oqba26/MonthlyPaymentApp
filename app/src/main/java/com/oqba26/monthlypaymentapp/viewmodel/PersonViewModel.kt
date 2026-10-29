@@ -212,7 +212,7 @@ class PersonViewModel @Inject constructor(
                     }
                     val latestPayment = personCyclePayments.maxByOrNull { if ((it.createdAt ?: 0L) > 0L) it.createdAt!! else it.timestamp }
                     val lastPaymentTime = latestPayment?.let { if ((it.createdAt ?: 0L) > 0L) it.createdAt!! else it.timestamp }
-                    val lastPaymentAmount = latestPayment?.amount
+                    val lastPaymentAmount = if (personCyclePayments.isNotEmpty()) personCyclePayments.sumOf { it.amount } else null
                     
                     val unpaidResult = if (category == "mosque" || person.isAnonymous) {
                         Triple(0, 0.0, emptyList<String>() to emptyList())
