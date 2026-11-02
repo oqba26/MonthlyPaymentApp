@@ -20,8 +20,22 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+      - name: Setup Android SDK (Self-Hosted / Gitea)
+        if: "!contains(github.server_url, 'github.com')"
+        run: |
+          which unzip || (apt-get update && apt-get install -y unzip curl)
+          mkdir -p /opt/android-sdk/cmdline-tools
+          curl -s -L -o /tmp/cmdline-tools.zip https://mirrors.cloud.tencent.com/AndroidSDK/commandlinetools-linux-11076708_latest.zip
+          unzip -q /tmp/cmdline-tools.zip -d /opt/android-sdk/cmdline-tools
+          mv /opt/android-sdk/cmdline-tools/cmdline-tools /opt/android-sdk/cmdline-tools/latest
+          rm /tmp/cmdline-tools.zip
+          echo "ANDROID_HOME=/opt/android-sdk" >> $GITHUB_ENV
+          echo "/opt/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "/opt/android-sdk/platform-tools" >> $GITHUB_PATH
+          export ANDROID_HOME=/opt/android-sdk
+          export PATH="/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:$PATH"
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
