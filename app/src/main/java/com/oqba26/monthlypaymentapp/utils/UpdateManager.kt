@@ -45,7 +45,7 @@ sealed class DownloadState {
 
 class UpdateManager(private val context: Context) {
 
-    private val updateUrl = "https://raw.githubusercontent.com/oqba26/MonthlyPaymentApp/main/update.json"
+    private val updateUrl = "https://git.mizbanplatform.ir/oqba26/MonthlyPaymentApp/raw/branch/main/update.json"
 
     private val json = Json {
         ignoreUnknownKeys = true

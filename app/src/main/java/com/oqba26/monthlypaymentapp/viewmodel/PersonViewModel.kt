@@ -185,8 +185,9 @@ class PersonViewModel @Inject constructor(
                 localPersonRepository.getAllPersonsFlow(),
                 localPersonRepository.getAllPaymentsFlow(),
                 _searchQuery,
-                _currentCategory
-            ) { persons, allPayments, query, category ->
+                _currentCategory,
+                settingsRepository.defaultPaymentAmountFlow
+            ) { persons, allPayments, query, category, defaultPaymentAmount ->
                 val currentMonth = getCurrentShamsiMonth()
                 val currentYear = getCurrentShamsiYear()
                 val currentDay = getCurrentShamsiDay()
@@ -224,8 +225,7 @@ class PersonViewModel @Inject constructor(
                         val unpaid = (debtStartMonth..debtEndMonth).filter { m ->
                             allPayments.none { it.personId == person.id && it.shamsiYear == currentYear && it.shamsiMonth == m && it.category == category }
                         }
-                        val defaultAmount = settingsRepository.defaultPaymentAmountFlow.first()
-                        val amountPerMonth = if (person.monthlyCommitment > 0) person.monthlyCommitment else defaultAmount
+                        val amountPerMonth = if (person.monthlyCommitment > 0) person.monthlyCommitment else defaultPaymentAmount
                         Triple(unpaid.size, unpaid.size * amountPerMonth, unpaid.map { getPersianMonthName(it) } to unpaid)
                     }
 
@@ -415,10 +415,22 @@ class PersonViewModel @Inject constructor(
                     val isMosque = _currentCategory.value == "mosque"
                     val targetMonth = if (isMosque) currentMonth else (if (currentDay >= 20) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1)
                     val targetYear = if (isMosque) currentYear else (if (currentDay < 20 && currentMonth == 1) currentYear - 1 else currentYear)
+                    val category = _currentCategory.value
 
-                    val record = createPaymentRecord(event.personId, targetMonth, targetYear, event.amount, event.description)
-                        .copy(category = _currentCategory.value)
-                    localPersonRepository.insertPaymentLocally(record)
+                    val existing = if (!isMosque) {
+                        localPersonRepository.getAllPayments().find {
+                            it.personId == event.personId && it.shamsiYear == targetYear && it.shamsiMonth == targetMonth && it.category == category
+                        }
+                    } else null
+
+                    if (existing != null) {
+                        val updated = existing.copy(amount = event.amount, description = event.description, timestamp = System.currentTimeMillis())
+                        localPersonRepository.insertPaymentLocally(updated)
+                    } else {
+                        val record = createPaymentRecord(event.personId, targetMonth, targetYear, event.amount, event.description)
+                            .copy(category = category)
+                        localPersonRepository.insertPaymentLocally(record)
+                    }
                 }
 
                 is PersonScreenEvent.SelectPerson -> {
@@ -477,9 +489,20 @@ class PersonViewModel @Inject constructor(
                 is PersonScreenEvent.AddPaymentForMonth -> {
                     val person = localPersonRepository.getAllPersonsFlow().first().find { it.id == event.personId }
                     val category = person?.category ?: _currentCategory.value
-                    val record = createPaymentRecord(event.personId, event.month, event.year, event.amount, event.description)
-                        .copy(category = category)
-                    localPersonRepository.insertPaymentLocally(record)
+                    val existing = if (category != "mosque") {
+                        localPersonRepository.getAllPayments().find {
+                            it.personId == event.personId && it.shamsiYear == event.year && it.shamsiMonth == event.month && it.category == category
+                        }
+                    } else null
+
+                    if (existing != null) {
+                        val updated = existing.copy(amount = event.amount, description = event.description, timestamp = System.currentTimeMillis())
+                        localPersonRepository.insertPaymentLocally(updated)
+                    } else {
+                        val record = createPaymentRecord(event.personId, event.month, event.year, event.amount, event.description)
+                            .copy(category = category)
+                        localPersonRepository.insertPaymentLocally(record)
+                    }
                 }
 
                 is PersonScreenEvent.UpdatePayment -> {
@@ -488,7 +511,20 @@ class PersonViewModel @Inject constructor(
                 }
 
                 is PersonScreenEvent.DeletePayment -> {
-                    localPersonRepository.deletePaymentLocally(event.payment.id)
+                    val paymentsToDelete = if (event.payment.category != "mosque") {
+                        localPersonRepository.getAllPayments().filter {
+                            it.personId == event.payment.personId &&
+                            it.shamsiYear == event.payment.shamsiYear &&
+                            it.shamsiMonth == event.payment.shamsiMonth &&
+                            it.category == event.payment.category
+                        }.ifEmpty { listOf(event.payment) }
+                    } else {
+                        listOf(event.payment)
+                    }
+
+                    paymentsToDelete.forEach { payment ->
+                        localPersonRepository.deletePaymentLocally(payment.id)
+                    }
                     _toastMessage.emit("پرداخت با موفقیت حذف شد")
                 }
 
@@ -519,6 +555,7 @@ class PersonViewModel @Inject constructor(
                         val currentMonth = getCurrentShamsiMonth()
                         val currentYear = getCurrentShamsiYear()
                         val currentDateTime = formatTimestampToPersianDateTime(System.currentTimeMillis())
+                        val allPayments = localPersonRepository.getAllPayments()
 
                         event.months.forEach { month ->
                             val monthName = getPersianMonthName(month)
@@ -529,14 +566,29 @@ class PersonViewModel @Inject constructor(
                                 "پرداخت برای $monthName در تاریخ $currentDateTime ثبت شد."
                             }
 
-                            val record = createPaymentRecord(
-                                personId = event.personId,
-                                month = month,
-                                year = event.year,
-                                amount = event.amount,
-                                description = description
-                            ).copy(category = category)
-                            localPersonRepository.insertPaymentLocally(record)
+                            val existing = if (category != "mosque") {
+                                allPayments.find {
+                                    it.personId == event.personId && it.shamsiYear == event.year && it.shamsiMonth == month && it.category == category
+                                }
+                            } else null
+
+                            if (existing != null) {
+                                val updated = existing.copy(
+                                    amount = event.amount,
+                                    description = description,
+                                    timestamp = System.currentTimeMillis()
+                                )
+                                localPersonRepository.insertPaymentLocally(updated)
+                            } else {
+                                val record = createPaymentRecord(
+                                    personId = event.personId,
+                                    month = month,
+                                    year = event.year,
+                                    amount = event.amount,
+                                    description = description
+                                ).copy(category = category)
+                                localPersonRepository.insertPaymentLocally(record)
+                            }
                         }
                     } catch (_: Exception) {
                         _toastMessage.emit("خطا در ثبت پرداخت‌های دسته جمعی")

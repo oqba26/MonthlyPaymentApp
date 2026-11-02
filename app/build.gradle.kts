@@ -30,8 +30,8 @@ android {
         applicationId = "com.oqba26.monthlypaymentapp"
         minSdk = 25
         targetSdk = 34
-        versionCode = 16
-        versionName = "1.1.5"
+        versionCode = 17
+        versionName = "1.1.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -126,11 +126,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     // Networking
-    implementation(libs.retrofit.core)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.kotlin.serialization.json)
-    implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
 
     // Database (Room)
     implementation(libs.androidx.room.runtime)

@@ -333,9 +333,33 @@ fun AuthenticatedContent(viewModel: PersonViewModel, contactViewModel: ContactVi
         Screen.Settings.route
     )
 
-    // هندل کردن دکمه Back
+    val isSelectionMode by viewModel.isSelectionMode.collectAsState()
+
+    // هندل کردن دکمه Back:
+    // ۱. اگر در حالت انتخاب آیتم‌ها باشد، لغو انتخاب
+    // ۲. اگر در صفحه‌ای غیر از تب اصلی «پرداخت نشده» باشد، بازگشت به صفحه قبل / تب پرداخت نشده
+    // ۳. فقط در صفحه اصلی «پرداخت نشده»، دیالوگ خروج نمایش داده می‌شود
     BackHandler {
-        showExitDialog = true
+        when {
+            isSelectionMode -> {
+                viewModel.onEvent(PersonScreenEvent.ClearSelection)
+            }
+            currentRoute != Screen.Unpaid.route -> {
+                val popped = navController.popBackStack()
+                if (!popped) {
+                    navController.navigate(Screen.Unpaid.route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            }
+            else -> {
+                showExitDialog = true
+            }
+        }
     }
 
     if (showExitDialog) {
@@ -347,7 +371,6 @@ fun AuthenticatedContent(viewModel: PersonViewModel, contactViewModel: ContactVi
         )
     }
 
-    val isSelectionMode by viewModel.isSelectionMode.collectAsState()
     var showConfirmMoveDialog by remember { mutableStateOf(false) }
 
     if (showConfirmMoveDialog) {

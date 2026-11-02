@@ -56,20 +56,45 @@ class LocalPersonRepository(
             if (personPlan.upserts.isNotEmpty()) personDao.insertAll(personPlan.upserts)
             if (paymentPlan.upserts.isNotEmpty()) paymentDao.insertAllPaymentRecords(paymentPlan.upserts)
 
-            // خودترمیمی: اگر رکوردهایی در دیتابیس محلی هستند که در سرور وجود ندارند و در صف هم نیستند،
-            // آن‌ها را دوباره برای ارسال به سرور ثبت می‌کنیم تا سرور و کلاینت همگام شوند.
+            // خودترمیمی: فقط رکوردهای محلی که نیاز به سینک دارند (آفلاین ایجاد شده‌اند) و در سرور نیستند ارسال شوند
             val serverPersonIds = persons.map { it.id }.toSet()
-            val missingPersons = localPersons.filter { it.id !in serverPersonIds && it.id !in pendingIds }
-            for (p in missingPersons) {
-                personDao.insertAll(listOf(p.copy(needsSync = true)))
+            val offlinePersons = localPersons.filter { it.needsSync && it.id !in serverPersonIds && it.id !in pendingIds }
+            for (p in offlinePersons) {
+                personDao.insertAll(listOf(p))
                 syncQueueDao.insert(SyncQueue(entityId = p.id, type = SyncType.PERSON, operation = SyncOperation.INSERT))
+            }
+            // رکوردهایی که قبلاً سینک شده بودند ولی روی سرور حذف شده‌اند، از دیتابیس محلی هم حذف می‌شوند
+            val deletedPersonIds = localPersons.filter { !it.needsSync && it.id !in serverPersonIds && it.id !in pendingIds }.map { it.id }
+            if (deletedPersonIds.isNotEmpty()) {
+                personDao.deleteByIds(deletedPersonIds)
             }
 
             val serverPaymentIds = payments.map { it.id }.toSet()
-            val missingPayments = localPayments.filter { it.id !in serverPaymentIds && it.id !in pendingIds }
-            for (p in missingPayments) {
-                paymentDao.insertAllPaymentRecords(listOf(p.copy(needsSync = true)))
+            val offlinePayments = localPayments.filter { it.needsSync && it.id !in serverPaymentIds && it.id !in pendingIds }
+            for (p in offlinePayments) {
+                paymentDao.insertAllPaymentRecords(listOf(p))
                 syncQueueDao.insert(SyncQueue(entityId = p.id, type = SyncType.PAYMENT, operation = SyncOperation.INSERT))
+            }
+            val deletedPaymentIds = localPayments.filter { !it.needsSync && it.id !in serverPaymentIds && it.id !in pendingIds }.map { it.id }
+            if (deletedPaymentIds.isNotEmpty()) {
+                paymentDao.deleteByIds(deletedPaymentIds)
+            }
+
+            // پاک‌سازی پرداخت‌های تکراری: برای هر شخص، سال و ماه (غیر از مسجد)، حداکثر ۱ پرداخت نگه‌داری شود
+            val duplicatePayments = paymentDao.getAllPayments()
+                .filter { it.category != "mosque" }
+                .groupBy { Triple(it.personId, it.shamsiYear, it.shamsiMonth) }
+                .values
+                .filter { it.size > 1 }
+                .flatMap { group ->
+                    val sorted = group.sortedByDescending { it.timestamp }
+                    sorted.drop(1).map { it.id }
+                }
+            if (duplicatePayments.isNotEmpty()) {
+                paymentDao.deleteByIds(duplicatePayments)
+                for (dupId in duplicatePayments) {
+                    syncQueueDao.insert(SyncQueue(entityId = dupId, type = SyncType.PAYMENT, operation = SyncOperation.DELETE))
+                }
             }
         }
     }
