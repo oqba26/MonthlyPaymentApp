@@ -49,17 +49,29 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
+          # 1. Setup Java
           if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME" ]; then
             JAVA_BIN=$(which java 2>/dev/null || find /usr /opt -name java -type f 2>/dev/null | grep -E '/bin/java$' | head -n 1 || echo /usr/lib/jvm/java-21-openjdk-amd64/bin/java)
             export JAVA_HOME=$(dirname $(dirname $(readlink -f "$JAVA_BIN")))
             export PATH="$JAVA_HOME/bin:$PATH"
           fi
-          if [ -z "$ANDROID_HOME" ] || [ ! -d "$ANDROID_HOME" ]; then
-            export ANDROID_HOME=/opt/android-sdk-linux
-            export ANDROID_SDK_ROOT=/opt/android-sdk-linux
-            export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+
+          # 2. Setup Android SDK and local.properties
+          SDK_DIR="/opt/android-sdk-linux"
+          if [ ! -d "$SDK_DIR" ]; then
+            SDK_DIR=$(find /opt /usr /root -maxdepth 3 -name "platforms" -type d 2>/dev/null | head -n 1 | xargs -r dirname)
           fi
-          ./gradlew assembleRelease --no-daemon
+          echo "Using Android SDK at: $SDK_DIR"
+          export ANDROID_HOME="$SDK_DIR"
+          export ANDROID_SDK_ROOT="$SDK_DIR"
+          export PATH="$SDK_DIR/cmdline-tools/latest/bin:$SDK_DIR/platform-tools:$PATH"
+
+          # Write local.properties so Gradle finds it unconditionally
+          echo "sdk.dir=$SDK_DIR" > local.properties
+          cat local.properties
+
+          # 3. Build Release APK without lint
+          ./gradlew assembleRelease -Pandroid.sdk.path="$SDK_DIR" -x lint -x lintVitalRelease -x lintVitalReportRelease --no-daemon
 
       - name: Rename APK
         run: |

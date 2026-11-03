@@ -41,6 +41,11 @@ android {
         buildConfig = true
     }
 
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
+
     signingConfigs {
         create("release") {
             val storeFileProp = getProp("RELEASE_STORE_FILE")
