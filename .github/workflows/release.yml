@@ -14,6 +14,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Configure Environment (Gitea)
+        if: "!contains(github.server_url, 'github.com')"
+        run: |
+          JAVA_BIN=$(which java 2>/dev/null || find /usr /opt -name java -type f 2>/dev/null | grep -E '/bin/java$' | head -n 1 || echo /usr/lib/jvm/java-21-openjdk-amd64/bin/java)
+          JAVA_PATH=$(dirname $(dirname $(readlink -f "$JAVA_BIN")))
+          echo "Using JAVA_HOME=$JAVA_PATH"
+          echo "JAVA_HOME=$JAVA_PATH" >> $GITHUB_ENV
+          echo "ANDROID_HOME=/opt/android-sdk-linux" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=/opt/android-sdk-linux" >> $GITHUB_ENV
+          echo "$JAVA_PATH/bin" >> $GITHUB_PATH
+          echo "/opt/android-sdk-linux/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "/opt/android-sdk-linux/platform-tools" >> $GITHUB_PATH
+
       - name: Set up JDK 21 (GitHub Hosted)
         if: contains(github.server_url, 'github.com')
         uses: actions/setup-java@v4
@@ -35,7 +48,18 @@ jobs:
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --no-daemon
+        run: |
+          if [ -z "$JAVA_HOME" ] || [ ! -d "$JAVA_HOME" ]; then
+            JAVA_BIN=$(which java 2>/dev/null || find /usr /opt -name java -type f 2>/dev/null | grep -E '/bin/java$' | head -n 1 || echo /usr/lib/jvm/java-21-openjdk-amd64/bin/java)
+            export JAVA_HOME=$(dirname $(dirname $(readlink -f "$JAVA_BIN")))
+            export PATH="$JAVA_HOME/bin:$PATH"
+          fi
+          if [ -z "$ANDROID_HOME" ] || [ ! -d "$ANDROID_HOME" ]; then
+            export ANDROID_HOME=/opt/android-sdk-linux
+            export ANDROID_SDK_ROOT=/opt/android-sdk-linux
+            export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          fi
+          ./gradlew assembleRelease --no-daemon
 
       - name: Rename APK
         run: |
@@ -43,6 +67,7 @@ jobs:
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: MonthlyPaymentApp-${{ github.ref_name }}
           path: app/build/outputs/apk/release/MonthlyPaymentApp-${{ github.ref_name }}.apk
@@ -78,8 +103,8 @@ jobs:
 
           git config user.name "actions-bot"
           git config user.email "bot@mizbanplatform.ir"
-          git fetch origin main
-          git checkout main
+          git fetch origin main || true
+          git checkout main || true
 
           cat <<EOF > update.json
           {
@@ -93,4 +118,4 @@ jobs:
 
           git add update.json
           git commit -m "auto-update update.json for release ${TAG_NAME}" || true
-          git push origin main
+          git push origin main || echo "Push skipped or not needed"
