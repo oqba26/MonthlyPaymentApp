@@ -1,7 +1,7 @@
 {
   "versionCode": 17,
   "versionName": "1.1.6",
-  "url": "https://git.mizbanplatform.ir/oqba26/MonthlyPaymentApp/releases/download/v1.1.6/MonthlyPaymentApp-v1.1.6.apk",
-  "releaseNotes": "رفع باگ حذف پرداخت‌ها و پایداری همگام‌سازی",
+  "url": "https://github.com/oqba26/MonthlyPaymentApp/releases/download/v1.1.6/MonthlyPaymentApp-v1.1.6.apk",
+  "releaseNotes": "بهبودهای پایداری و عملکرد همگام‌سازی",
   "isForceUpdate": false
 }
