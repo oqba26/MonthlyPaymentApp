@@ -13,32 +13,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Set up JDK 21
+
+      - name: Set up JDK 21 (GitHub Hosted)
+        if: contains(github.server_url, 'github.com')
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-
-      - name: Setup Android SDK (Self-Hosted / Gitea)
-        if: "!contains(github.server_url, 'github.com')"
-        run: |
-          which unzip || (apt-get update && apt-get install -y unzip curl)
-          mkdir -p /opt/android-sdk/cmdline-tools
-          curl -s -L -o /tmp/cmdline-tools.zip https://mirrors.cloud.tencent.com/AndroidSDK/commandlinetools-linux-11076708_latest.zip
-          unzip -q -o /tmp/cmdline-tools.zip -d /opt/android-sdk/cmdline-tools
-          [ -d /opt/android-sdk/cmdline-tools/cmdline-tools ] && mv /opt/android-sdk/cmdline-tools/cmdline-tools /opt/android-sdk/cmdline-tools/latest || true
-          rm -f /tmp/cmdline-tools.zip
-          echo "ANDROID_HOME=/opt/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=/opt/android-sdk" >> $GITHUB_ENV
-          echo "/opt/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "/opt/android-sdk/platform-tools" >> $GITHUB_PATH
-          export ANDROID_HOME=/opt/android-sdk
-          export ANDROID_SDK_ROOT=/opt/android-sdk
-          export PATH="/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:$PATH"
-          export JAVA_OPTS="-Djava.net.preferIPv4Stack=true -Dfile.encoding=UTF-8"
-          yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/opt/android-sdk --licenses || true
-          /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/opt/android-sdk "platforms;android-34" "build-tools;34.0.0" "platform-tools" || true
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -105,7 +86,7 @@ jobs:
             "versionCode": ${VERSION_CODE},
             "versionName": "${VERSION_NAME}",
             "url": "${{ github.server_url }}/${{ github.repository }}/releases/download/${TAG_NAME}/MonthlyPaymentApp-${TAG_NAME}.apk",
-            "releaseNotes": "بهبودهای پایداری و عملکرد همگام‌سازی",
+            "releaseNotes": "رفع باگ حذف پرداخت‌ها و پایداری همگام‌سازی",
             "isForceUpdate": false
           }
           EOF
