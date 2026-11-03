@@ -54,11 +54,12 @@ jobs:
           export JAVA_HOME=$(dirname $(dirname $(readlink -f "$JAVA_BIN")))
           export PATH="$JAVA_HOME/bin:$PATH"
 
-          # 2. Setup Android SDK
+          # 2. Setup Android SDK and fast mirrors for runner
           export ANDROID_HOME=/opt/android-sdk-linux
           export ANDROID_SDK_ROOT=/opt/android-sdk-linux
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
           echo "sdk.dir=/opt/android-sdk-linux" > local.properties
+          sed -i 's|services.gradle.org/distributions|mirrors.cloud.tencent.com/gradle|g' gradle/wrapper/gradle-wrapper.properties
 
           # 3. Build Release APK
           ./gradlew assembleRelease --no-daemon -x lint -x test
