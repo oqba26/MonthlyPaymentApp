@@ -30,8 +30,8 @@ android {
         applicationId = "com.oqba26.monthlypaymentapp"
         minSdk = 25
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.1.6"
+        versionCode = 18
+        versionName = "1.1.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -114,11 +114,11 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.material)
+    implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.navigation.compose)
-    implementation("androidx.compose.material:material")
-    implementation("androidx.compose.material:material-icons-extended-android:1.6.7")
-    implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
+    implementation(libs.compose.reorderable)
 
     // PocketBase / Ktor Network
     implementation(libs.ktor.client.okhttp)
@@ -161,7 +161,6 @@ dependencies {
     androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.androidTest.junit.ext)
     androidTestImplementation(libs.androidTest.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidTest.compose.ui.test.junit4)
 
     debugImplementation(libs.androidx.ui.tooling)

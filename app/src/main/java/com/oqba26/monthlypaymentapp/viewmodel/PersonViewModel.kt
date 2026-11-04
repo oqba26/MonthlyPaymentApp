@@ -511,19 +511,28 @@ class PersonViewModel @Inject constructor(
                 }
 
                 is PersonScreenEvent.DeletePayment -> {
-                    val paymentsToDelete = if (event.payment.category != "mosque") {
+                    val localMatches = if (event.payment.category != "mosque") {
                         localPersonRepository.getAllPayments().filter {
                             it.personId == event.payment.personId &&
                             it.shamsiYear == event.payment.shamsiYear &&
                             it.shamsiMonth == event.payment.shamsiMonth &&
                             it.category == event.payment.category
-                        }.ifEmpty { listOf(event.payment) }
-                    } else {
-                        listOf(event.payment)
-                    }
+                        }
+                    } else emptyList()
 
-                    paymentsToDelete.forEach { payment ->
-                        localPersonRepository.deletePaymentLocally(payment.id)
+                    val serverMatches = if (event.payment.category != "mosque") {
+                        networkRepository.getPaymentsFlow().first().filter {
+                            it.personId == event.payment.personId &&
+                            it.shamsiYear == event.payment.shamsiYear &&
+                            it.shamsiMonth == event.payment.shamsiMonth &&
+                            it.category == event.payment.category
+                        }
+                    } else emptyList()
+
+                    val allIdsToDelete = (localMatches.map { it.id } + serverMatches.map { it.id } + event.payment.id).distinct()
+
+                    allIdsToDelete.forEach { paymentId ->
+                        localPersonRepository.deletePaymentLocally(paymentId)
                     }
                     _toastMessage.emit("پرداخت با موفقیت حذف شد")
                 }

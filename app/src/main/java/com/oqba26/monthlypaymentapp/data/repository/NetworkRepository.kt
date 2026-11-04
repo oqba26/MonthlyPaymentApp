@@ -12,7 +12,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Collections
 import java.util.UUID
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -23,6 +25,8 @@ class NetworkRepository(
     private val pocketBase = ApiClient.pocketBase
     private val _personsFlow = MutableStateFlow<List<Person>>(emptyList())
     private val _paymentsFlow = MutableStateFlow<List<PaymentRecord>>(emptyList())
+    private val deletedPaymentIds = Collections.synchronizedSet(mutableSetOf<String>())
+    private val deletedPersonIds = Collections.synchronizedSet(mutableSetOf<String>())
     private val repositoryScope = CoroutineScope(Dispatchers.IO)
 
     /**
@@ -106,6 +110,10 @@ class NetworkRepository(
     }
 
     suspend fun deletePersonAndPayments(personId: String): Boolean {
+        deletedPersonIds.add(personId)
+        _personsFlow.update { list -> list.filterNot { it.id == personId } }
+        _paymentsFlow.update { list -> list.filterNot { it.personId == personId } }
+
         return try {
             pocketBase.deleteRecordByFilter("payments", "personId='$personId'")
             pocketBase.deleteRecordByFilter("persons", "id='$personId'")
@@ -172,12 +180,20 @@ class NetworkRepository(
     }
 
     suspend fun deletePayment(paymentId: String): Boolean {
+        deletedPaymentIds.add(paymentId)
+        _paymentsFlow.update { list -> list.filterNot { it.id == paymentId } }
+
         val maxRetries = 2
         for (retries in 1..maxRetries) {
             try {
-                pocketBase.deleteRecordByFilter("payments", "id='$paymentId'")
-                Log.d("PocketBase", "deletePayment Success: $paymentId")
-                return true
+                val ok = pocketBase.deleteRecordByFilter("payments", "id='$paymentId'")
+                if (ok) {
+                    _paymentsFlow.update { list -> list.filterNot { it.id == paymentId } }
+                    Log.d("PocketBase", "deletePayment Success: $paymentId")
+                    return true
+                } else {
+                    Log.w("PocketBase", "deletePayment failed on attempt $retries: $paymentId")
+                }
             } catch (e: Exception) {
                 Log.e("PocketBase", "deletePayment error (Attempt $retries): ${e.message}", e)
                 if (retries < maxRetries) {
@@ -195,8 +211,15 @@ class NetworkRepository(
      */
     suspend fun refresh(): Boolean {
         return try {
-            val persons = pocketBase.getRecords<Person>("persons")
-            val payments = pocketBase.getRecords<PaymentRecord>("payments", sort = "-timestamp")
+            val rawPersons = pocketBase.getRecords<Person>("persons")
+            val rawPayments = pocketBase.getRecords<PaymentRecord>("payments", sort = "-timestamp")
+
+            // حذف رکوردهایی که سرور دیگر آن‌ها را برنمی‌گرداند از لیست حذفیات موقت
+            deletedPersonIds.removeAll { id -> rawPersons.none { it.id == id } }
+            deletedPaymentIds.removeAll { id -> rawPayments.none { it.id == id } }
+
+            val persons = rawPersons.filterNot { it.id in deletedPersonIds }
+            val payments = rawPayments.filterNot { it.id in deletedPaymentIds || it.personId in deletedPersonIds }
 
             _personsFlow.value = persons
             _paymentsFlow.value = payments

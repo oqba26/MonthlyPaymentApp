@@ -17,11 +17,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * ارسال تغییرات محلی به سرور.
@@ -48,7 +50,7 @@ import javax.inject.Singleton
 class SyncManager @Inject constructor(
     private val localRepository: LocalPersonRepository,
     private val networkRepository: NetworkRepository,
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -70,7 +72,8 @@ class SyncManager @Inject constructor(
 
         // مصرف‌کننده‌ی تنها
         scope.launch {
-            for (ignored in trigger) {
+            while (isActive) {
+                trigger.receive()
                 mutex.withLock {
                     try {
                         processQueue()
@@ -102,12 +105,13 @@ class SyncManager @Inject constructor(
             val request = NetworkRequest.Builder()
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 .build()
-            cm.registerNetworkCallback(request, object : ConnectivityManager.NetworkCallback() {
+            val callback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
                     Log.d(TAG, "شبکه برگشت — تلاش دوباره برای سینک")
                     trigger.trySend(Unit)
                 }
-            })
+            }
+            cm.registerNetworkCallback(request, callback)
         } catch (e: Exception) {
             // نبود این زنگ فقط باعث می‌شود سینک دیرتر (با زنگ‌های دیگر) اتفاق بیفتد.
             Log.e(TAG, "ثبت NetworkCallback ناموفق بود", e)
@@ -128,8 +132,8 @@ class SyncManager @Inject constructor(
         }
 
         val now = System.currentTimeMillis()
-        val persons = localRepository.getAllPersons().associateBy { it.id }
-        val payments = localRepository.getAllPayments().associateBy { it.id }
+        val persons = localRepository.getAllPersons().associateBy(com.oqba26.monthlypaymentapp.data.model.Person::id)
+        val payments = localRepository.getAllPayments().associateBy(com.oqba26.monthlypaymentapp.data.model.PaymentRecord::id)
         var failed = false
 
         for (item in effective) {
@@ -165,7 +169,7 @@ class SyncManager @Inject constructor(
     /** یک زنگ تأخیری برای آیتم‌های شکست‌خورده. */
     private fun scheduleRetry() {
         scope.launch {
-            delay(RETRY_TICK_MS)
+            delay(RETRY_TICK_MS.milliseconds)
             trigger.trySend(Unit)
         }
     }
@@ -177,7 +181,7 @@ class SyncManager @Inject constructor(
      * [backoffMillis] صبر می‌کند تا در حالت آفلاین، لاگ و مصرف باتری منفجر نشود.
      */
     private fun isDue(item: SyncQueue, now: Long): Boolean =
-        item.lastAttemptAt == 0L || now - item.lastAttemptAt >= backoffMillis(item.attemptCount)
+        (item.lastAttemptAt == 0L) || ((now - item.lastAttemptAt) >= backoffMillis(item.attemptCount))
 
     /** ۲ ثانیه، ۴، ۸، ... تا سقف ۵ دقیقه. */
     private fun backoffMillis(attemptCount: Int): Long {
@@ -202,36 +206,40 @@ class SyncManager @Inject constructor(
         val effective = mutableListOf<SyncQueue>()
         val obsolete = mutableListOf<SyncQueue>()
 
-        items.groupBy { it.entityId to it.type }.forEach { (_, group) ->
-            val ordered = group.sortedBy { it.createdAt }
+        items.groupBy { it.entityId to it.type }.values.forEach { group ->
+            val ordered = group.sortedBy(SyncQueue::createdAt)
             val last = ordered.last()
             val hadInsert = ordered.any { it.operation == SyncOperation.INSERT }
 
             when {
-                // ساخته و بعد پاک شد، بدون اینکه هرگز به سرور برسد → کل ماجرا بی‌اثر است.
-                last.operation == SyncOperation.DELETE && hadInsert -> obsolete += ordered
+                // اگر آخرین عمل DELETE باشد، بدون توجه به عمل‌های قبلی (INSERT یا UPDATE)،
+                // باید درخواست حذف به سرور برود تا در صورتی که رکورد از قبل روی سرور بوده، حتماً پاک شود.
+                last.operation == SyncOperation.DELETE -> {
+                    effective += last
+                    obsolete += ordered.filter { (id) -> id != last.id }
+                }
 
                 // ساخته شد (و شاید بعد ویرایش) → یک INSERT کافی است؛ upsert حالت فعلی را می‌فرستد.
                 hadInsert -> {
                     val insert = ordered.first { it.operation == SyncOperation.INSERT }
                     effective += insert
-                    obsolete += ordered.filter { it.id != insert.id }
+                    obsolete += ordered.filter { (id) -> id != insert.id }
                 }
 
-                // فقط UPDATE/DELETE → آخری حرف آخر را می‌زند.
+                // فقط UPDATE → آخری حرف آخر را می‌زند.
                 else -> {
                     effective += last
-                    obsolete += ordered.filter { it.id != last.id }
+                    obsolete += ordered.filter { (id) -> id != last.id }
                 }
             }
         }
 
-        return effective.sortedBy { it.createdAt } to obsolete
+        return effective.sortedBy(SyncQueue::createdAt) to obsolete
     }
 
     private suspend fun syncPerson(
         item: SyncQueue,
-        person: com.oqba26.monthlypaymentapp.data.model.Person?
+        person: com.oqba26.monthlypaymentapp.data.model.Person?,
     ): Boolean = when (item.operation) {
         SyncOperation.DELETE -> networkRepository.deletePersonAndPayments(item.entityId)
 
@@ -251,7 +259,7 @@ class SyncManager @Inject constructor(
 
     private suspend fun syncPayment(
         item: SyncQueue,
-        payment: com.oqba26.monthlypaymentapp.data.model.PaymentRecord?
+        payment: com.oqba26.monthlypaymentapp.data.model.PaymentRecord?,
     ): Boolean = when (item.operation) {
         SyncOperation.DELETE -> networkRepository.deletePayment(item.entityId)
 

@@ -15,6 +15,7 @@ import com.oqba26.monthlypaymentapp.data.model.SyncOperation
 import com.oqba26.monthlypaymentapp.data.model.SyncType
 import com.oqba26.monthlypaymentapp.data.sync.SyncMerger
 import kotlinx.coroutines.flow.Flow
+import java.util.Collections
 import java.util.UUID
 
 class LocalPersonRepository(
@@ -23,6 +24,8 @@ class LocalPersonRepository(
     private val syncQueueDao: SyncQueueDao,
     private val database: AppDatabase
 ) {
+    private val recentlyDeletedPaymentIds = Collections.synchronizedSet(mutableSetOf<String>())
+    private val recentlyDeletedPersonIds = Collections.synchronizedSet(mutableSetOf<String>())
     // Reads
     fun getAllPersonsFlow(): Flow<List<Person>> = personDao.getAllPersonsFlow()
     fun getAllPaymentsFlow(): Flow<List<PaymentRecord>> = paymentDao.getAllPaymentsFlow()
@@ -48,13 +51,17 @@ class LocalPersonRepository(
             // collect کردن Flow روم داخل تراکنش خطر deadlock دارد.
             val localPersons = personDao.getAllPersons()
             val localPayments = paymentDao.getAllPayments()
-            val pendingIds = syncQueueDao.getAllPending().map { it.entityId }.toSet()
+            val pendingIds = syncQueueDao.getAllPending().map { it.entityId }.toSet() + recentlyDeletedPersonIds + recentlyDeletedPaymentIds
 
             val personPlan = SyncMerger.planPersons(localPersons, persons, pendingIds)
             val paymentPlan = SyncMerger.planPayments(localPayments, payments, pendingIds)
 
             if (personPlan.upserts.isNotEmpty()) personDao.insertAll(personPlan.upserts)
             if (paymentPlan.upserts.isNotEmpty()) paymentDao.insertAllPaymentRecords(paymentPlan.upserts)
+
+            // پاک‌سازی آی‌دی‌های حذف‌شده که سرور هم دیگر آن‌ها را برنمی‌گرداند
+            recentlyDeletedPersonIds.removeAll { id -> persons.none { it.id == id } }
+            recentlyDeletedPaymentIds.removeAll { id -> payments.none { it.id == id } }
 
             // خودترمیمی: فقط رکوردهای محلی که نیاز به سینک دارند (آفلاین ایجاد شده‌اند) و در سرور نیستند ارسال شوند
             val serverPersonIds = persons.map { it.id }.toSet()
@@ -170,6 +177,7 @@ class LocalPersonRepository(
     }
 
     suspend fun deletePersonLocally(personId: String) {
+        recentlyDeletedPersonIds.add(personId)
         database.withTransaction {
             personDao.deleteById(personId)
             paymentDao.deletePaymentsForPerson(personId)
@@ -185,6 +193,7 @@ class LocalPersonRepository(
     }
 
     suspend fun deletePaymentLocally(paymentId: String) {
+        recentlyDeletedPaymentIds.add(paymentId)
         database.withTransaction {
             paymentDao.deleteById(paymentId)
             syncQueueDao.insert(SyncQueue(entityId = paymentId, type = SyncType.PAYMENT, operation = SyncOperation.DELETE))

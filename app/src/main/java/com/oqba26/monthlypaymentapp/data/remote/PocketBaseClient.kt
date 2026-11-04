@@ -284,12 +284,17 @@ class PocketBaseClient(
                 val parsed = json.parseToJsonElement(jsonText).jsonObject
                 val items = parsed["items"]?.jsonArray
                 if (!items.isNullOrEmpty()) {
-                    items.forEach { item ->
+                    var allDeleted = true
+                    for (item in items) {
                         val pbId = item.jsonObject["id"]?.jsonPrimitive?.content
                         if (pbId != null) {
-                            deleteRecord(collectionName, pbId)
+                            val ok = deleteRecord(collectionName, pbId)
+                            if (!ok) allDeleted = false
                         }
                     }
+                    return allDeleted
+                } else {
+                    // هیچ رکوردی با این مشخصات روی سرور نیست (یا قبلاً حذف شده)؛ وضعیت نهایی حاصل است
                     return true
                 }
             }
