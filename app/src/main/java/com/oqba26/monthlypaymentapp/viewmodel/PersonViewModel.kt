@@ -9,6 +9,7 @@ import com.oqba26.monthlypaymentapp.data.model.Person
 import com.oqba26.monthlypaymentapp.data.repository.LocalPersonRepository
 import com.oqba26.monthlypaymentapp.data.repository.NetworkRepository
 import com.oqba26.monthlypaymentapp.data.repository.SettingsRepository
+import com.oqba26.monthlypaymentapp.utils.CYCLE_START_DAY
 import com.oqba26.monthlypaymentapp.utils.formatTimestampToPersianDateTime
 import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiDay
 import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiMonth
@@ -50,7 +51,7 @@ class PersonViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    private val _isRefreshing = MutableStateFlow(false)
+    private val _isRefreshing = MutableStateFlow(value = false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private val _selectedPersonId = MutableStateFlow<String?>(null)
@@ -102,7 +103,7 @@ class PersonViewModel @Inject constructor(
                     _selectedYear,
                     _currentCategory,
                 ) { persons, allPayments, year, category ->
-                    val person = persons.find { it.id == personId }
+                    val person = persons.find { (id) -> id == personId }
                     val personCategory = person?.category ?: category
                     val isMosque = (personCategory == "mosque")
                     val paymentsForPersonInYear = allPayments.filter {
@@ -116,7 +117,7 @@ class PersonViewModel @Inject constructor(
                         
                         // بررسی شروع تعهد
                         val isBeforeCommitment = (person != null) &&
-                            (year < person.startYear || (year == person.startYear && month < person.startMonth))
+                            ((year < person.startYear) || (year == person.startYear && month < person.startMonth))
 
                         val status = when {
                             payment != null -> MonthStatus.PAID
@@ -130,7 +131,7 @@ class PersonViewModel @Inject constructor(
                             isBeforeCommitment -> MonthStatus.NOT_COMMITTED
                             year < currentYear -> MonthStatus.PAST_YEAR
                             year > currentYear -> MonthStatus.FUTURE_YEAR
-                            month > currentMonth || (month == currentMonth && currentDay < 20) -> MonthStatus.FUTURE_MONTH
+                            month > currentMonth || (month == currentMonth && currentDay < CYCLE_START_DAY) -> MonthStatus.FUTURE_MONTH
                             else -> MonthStatus.AVAILABLE
                         }
                         MonthUiModel(month, payment, status)
@@ -153,7 +154,7 @@ class PersonViewModel @Inject constructor(
                             combine(
                                 networkRepository.getPersonsFlow(),
                                 networkRepository.getPaymentsFlow(),
-                                networkRepository.hasServerDataFlow()
+                                networkRepository.hasServerDataFlow(),
                             ) { persons, payments, hasServerData ->
                                 if (hasServerData) {
                                     if (!snapshotTakenThisSession) {
@@ -192,8 +193,8 @@ class PersonViewModel @Inject constructor(
                 val currentYear = getCurrentShamsiYear()
                 val currentDay = getCurrentShamsiDay()
 
-                val targetMonth = if (currentDay >= 20) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1
-                val targetYear = if (currentDay < 20 && currentMonth == 1) currentYear - 1 else currentYear
+                val targetMonth = if (currentDay >= CYCLE_START_DAY) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1
+                val targetYear = if (currentDay < CYCLE_START_DAY && currentMonth == 1) currentYear - 1 else currentYear
 
                 val relevantPayments = allPayments.filter {
                     it.shamsiMonth == targetMonth && it.shamsiYear == targetYear && it.category == category
@@ -202,8 +203,10 @@ class PersonViewModel @Inject constructor(
                 val categoryPayments = allPayments.filter { it.category == category }
 
                 val activePersons = persons
+                    .asSequence()
                     .filter { !it.isArchived && it.category == category }
                     .sortedWith(compareBy({ it.displayOrder }, { it.createdAt }))
+                    .toList()
 
                 val uiModels = activePersons.map { person ->
                     val hasPaid = relevantPayments.any { it.personId == person.id }
@@ -219,7 +222,7 @@ class PersonViewModel @Inject constructor(
                         Triple(0, 0.0, emptyList<String>() to emptyList())
                     } else {
                         // Salary logic
-                        val debtEndMonth = if (currentDay >= 20) currentMonth else currentMonth - 1
+                        val debtEndMonth = if (currentDay >= CYCLE_START_DAY) currentMonth else currentMonth - 1
                         val debtStartMonth = if (person.startYear == currentYear) person.startMonth else 1
                         
                         val unpaid = (debtStartMonth..debtEndMonth).filter { m ->
@@ -413,8 +416,8 @@ class PersonViewModel @Inject constructor(
                     val currentMonth = getCurrentShamsiMonth()
                     val currentYear = getCurrentShamsiYear()
                     val isMosque = _currentCategory.value == "mosque"
-                    val targetMonth = if (isMosque) currentMonth else (if (currentDay >= 20) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1)
-                    val targetYear = if (isMosque) currentYear else (if (currentDay < 20 && currentMonth == 1) currentYear - 1 else currentYear)
+                    val targetMonth = if (isMosque) currentMonth else (if (currentDay >= CYCLE_START_DAY) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1)
+                    val targetYear = if (isMosque) currentYear else (if (currentDay < CYCLE_START_DAY && currentMonth == 1) currentYear - 1 else currentYear)
                     val category = _currentCategory.value
 
                     val existing = if (!isMosque) {

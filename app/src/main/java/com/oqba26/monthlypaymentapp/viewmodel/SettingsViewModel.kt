@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.oqba26.monthlypaymentapp.core.manager.BackupManager
 import com.oqba26.monthlypaymentapp.core.manager.SnapshotInfo
 import com.oqba26.monthlypaymentapp.data.model.BackupData
+import com.oqba26.monthlypaymentapp.data.model.DeviceRecord
 import com.oqba26.monthlypaymentapp.data.repository.LocalPersonRepository
+import com.oqba26.monthlypaymentapp.data.repository.NetworkRepository
 import com.oqba26.monthlypaymentapp.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -15,6 +17,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
@@ -24,7 +28,8 @@ import kotlinx.serialization.json.Json
 class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val localPersonRepository: LocalPersonRepository,
-    private val backupManager: BackupManager
+    private val backupManager: BackupManager,
+    private val networkRepository: NetworkRepository,
 ) : ViewModel() {
 
     private val json = Json {
@@ -47,13 +52,119 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
     val isOperatorMode: StateFlow<Boolean> = settingsRepository.isOperatorModeFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), initialValue = false)
 
     val adminPin: StateFlow<String> = settingsRepository.adminPinFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), "1234")
 
+    val isMasterDevice: StateFlow<Boolean> = settingsRepository.isMasterDeviceFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), initialValue = false)
+
+    val masterKey: StateFlow<String> = settingsRepository.masterKeyFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), SettingsRepository.DEFAULT_MASTER_KEY)
+
+    val allowOperatorBackup: StateFlow<Boolean> = settingsRepository.allowOperatorBackupFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), initialValue = false)
+
+    val allowOperatorLogout: StateFlow<Boolean> = settingsRepository.allowOperatorLogoutFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), initialValue = false)
+
+    val allDevices: StateFlow<List<DeviceRecord>> = networkRepository.getDevicesFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+
     private val _toastMessage = MutableSharedFlow<String>()
     val toastMessage = _toastMessage.asSharedFlow()
+
+    fun initDeviceSession(deviceId: String, deviceName: String) {
+        viewModelScope.launch {
+            val isMaster = settingsRepository.isMasterDeviceFlow.first()
+            networkRepository.registerOrUpdateCurrentDevice(deviceId, deviceName, isMaster = isMaster)
+
+            // همگام‌سازی زنده با رکوردهای سرور
+            networkRepository.getDevicesFlow().collectLatest { devices ->
+                val myDevice = devices.find { (_, dId) -> dId == deviceId }
+                if (myDevice != null) {
+                    val currentIsMaster = settingsRepository.isMasterDeviceFlow.first()
+                    if (!currentIsMaster) {
+                        // اگر دستگاه مستر نیست، وضعیتش از سرور خوانده می‌شود
+                        val shouldBeOperator = !myDevice.isAdmin
+                        settingsRepository.setOperatorMode(shouldBeOperator)
+                        settingsRepository.setAllowOperatorBackup(myDevice.allowBackup)
+                        settingsRepository.setAllowOperatorLogout(myDevice.allowLogout)
+                    }
+                }
+            }
+        }
+    }
+
+    fun verifyAndActivateMasterDevice(enteredKey: String, currentDeviceId: String, currentDeviceName: String) {
+        viewModelScope.launch {
+            if (enteredKey == masterKey.value) {
+                settingsRepository.setMasterDevice(isMaster = true, currentDeviceId)
+                settingsRepository.setOperatorMode(false)
+                networkRepository.registerOrUpdateCurrentDevice(currentDeviceId, currentDeviceName, isMaster = true)
+                _toastMessage.emit("این دستگاه به عنوان دستگاه مدیر ارشد تأیید و فعال شد")
+            } else {
+                _toastMessage.emit("رمز ارشد (Master Key) نادرست است")
+            }
+        }
+    }
+
+    fun toggleDeviceAdmin(device: DeviceRecord) {
+        viewModelScope.launch {
+            val newAdmin = !device.isAdmin
+            networkRepository.updateDevicePermissions(device.id, isAdmin = newAdmin, allowBackup = device.allowBackup, allowLogout = device.allowLogout)
+            val name = device.deviceName.ifBlank { "دستگاه" }
+            _toastMessage.emit(if (newAdmin) "دسترسی مدیریت به $name داده شد" else "دسترسی مدیریت از $name گرفته شد")
+        }
+    }
+
+    fun toggleDeviceBackup(device: DeviceRecord) {
+        viewModelScope.launch {
+            val newBackup = !device.allowBackup
+            networkRepository.updateDevicePermissions(device.id, isAdmin = device.isAdmin, allowBackup = newBackup, allowLogout = device.allowLogout)
+            val name = device.deviceName.ifBlank { "دستگاه" }
+            _toastMessage.emit(if (newBackup) "دسترسی پشتیبان‌گیری برای $name فعال شد" else "دسترسی پشتیبان‌گیری برای $name غیرفعال شد")
+        }
+    }
+
+    fun toggleDeviceLogout(device: DeviceRecord) {
+        viewModelScope.launch {
+            val newLogout = !device.allowLogout
+            networkRepository.updateDevicePermissions(device.id, isAdmin = device.isAdmin, allowBackup = device.allowBackup, allowLogout = newLogout)
+            val name = device.deviceName.ifBlank { "دستگاه" }
+            _toastMessage.emit(if (newLogout) "دسترسی خروج از حساب برای $name فعال شد" else "دسترسی خروج از حساب برای $name غیرفعال شد")
+        }
+    }
+
+    fun deleteDevice(device: DeviceRecord) {
+        viewModelScope.launch {
+            networkRepository.deleteDeviceRecord(device.id)
+            _toastMessage.emit("دستگاه از لیست حذف شد")
+        }
+    }
+
+    fun deactivateMasterDevice() {
+        viewModelScope.launch {
+            settingsRepository.setMasterDevice(isMaster = false)
+            _toastMessage.emit("وضعیت مدیر ارشد از این دستگاه لغو شد")
+        }
+    }
+
+    fun changeMasterKey(oldKey: String, newKey: String) {
+        viewModelScope.launch {
+            if (oldKey != masterKey.value) {
+                _toastMessage.emit("رمز ارشد فعلی نادرست است")
+                return@launch
+            }
+            if (newKey.length < 4) {
+                _toastMessage.emit("رمز ارشد جدید باید حداقل ۴ کاراکتر باشد")
+                return@launch
+            }
+            settingsRepository.setMasterKey(newKey)
+            _toastMessage.emit("رمز ارشد با موفقیت به‌روزرسانی شد")
+        }
+    }
 
     fun setOperatorMode(enabled: Boolean) {
         viewModelScope.launch {

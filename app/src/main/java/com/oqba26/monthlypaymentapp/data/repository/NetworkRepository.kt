@@ -3,6 +3,7 @@ package com.oqba26.monthlypaymentapp.data.repository
 import android.util.Log
 import com.oqba26.monthlypaymentapp.data.model.AuthRequest
 import com.oqba26.monthlypaymentapp.data.model.AuthResponse
+import com.oqba26.monthlypaymentapp.data.model.DeviceRecord
 import com.oqba26.monthlypaymentapp.data.model.PaymentRecord
 import com.oqba26.monthlypaymentapp.data.model.Person
 import com.oqba26.monthlypaymentapp.data.remote.ApiClient
@@ -19,12 +20,15 @@ import java.util.UUID
 import kotlin.time.Duration.Companion.milliseconds
 
 class NetworkRepository(
-    settingsRepository: SettingsRepository? = null
+    settingsRepository: SettingsRepository? = null,
 ) {
 
     private val pocketBase = ApiClient.pocketBase
     private val _personsFlow = MutableStateFlow<List<Person>>(emptyList())
     private val _paymentsFlow = MutableStateFlow<List<PaymentRecord>>(emptyList())
+    private val _devicesFlow = MutableStateFlow<List<DeviceRecord>>(emptyList())
+    fun getDevicesFlow(): Flow<List<DeviceRecord>> = _devicesFlow.asStateFlow()
+
     private val deletedPaymentIds = Collections.synchronizedSet(mutableSetOf<String>())
     private val deletedPersonIds = Collections.synchronizedSet(mutableSetOf<String>())
     private val repositoryScope = CoroutineScope(Dispatchers.IO)
@@ -32,7 +36,7 @@ class NetworkRepository(
     /**
      * تا وقتی حداقل یک [refresh] موفق انجام نشده باشد `false` است.
      */
-    private val _hasServerData = MutableStateFlow(false)
+    private val _hasServerData = MutableStateFlow(value = false)
     fun hasServerDataFlow(): Flow<Boolean> = _hasServerData.asStateFlow()
 
     init {
@@ -50,7 +54,7 @@ class NetworkRepository(
         repositoryScope.launch {
             while (true) {
                 try {
-                    pocketBase.listenRealtime(listOf("persons", "payments")).collect { event ->
+                    pocketBase.listenRealtime(listOf("persons", "payments", "devices")).collect { event ->
                         Log.d("PocketBase-Realtime", "Change detected in PocketBase: $event")
                         refresh()
                     }
@@ -223,12 +227,83 @@ class NetworkRepository(
 
             _personsFlow.value = persons
             _paymentsFlow.value = payments
+
+            val rawDevices = try {
+                pocketBase.getRecords<DeviceRecord>("devices", sort = "-lastActive")
+            } catch (e: Exception) {
+                Log.w("PocketBase", "Failed to fetch devices: ${e.message}")
+                emptyList()
+            }
+            _devicesFlow.value = rawDevices
+
             _hasServerData.value = true
 
-            Log.d("PocketBase", "Refresh Success: ${persons.size} persons, ${payments.size} payments")
+            Log.d("PocketBase", "Refresh Success: ${persons.size} persons, ${payments.size} payments, ${rawDevices.size} devices")
             true
         } catch (e: Exception) {
             Log.e("PocketBase", "refresh error", e)
+            false
+        }
+    }
+
+    suspend fun registerOrUpdateCurrentDevice(deviceId: String, deviceName: String, isMaster: Boolean = false): DeviceRecord? {
+        return try {
+            val existing = pocketBase.getRecords<DeviceRecord>("devices", filter = "deviceId='$deviceId'")
+            if (existing.isNotEmpty()) {
+                val current = existing.first()
+                val updated = current.copy(
+                    deviceName = deviceName,
+                    lastActive = System.currentTimeMillis(),
+                    isAdmin = isMaster || current.isAdmin,
+                    allowBackup = isMaster || current.allowBackup,
+                    allowLogout = isMaster || current.allowLogout,
+                )
+                pocketBase.updateRecord("devices", current.id, updated)
+                refresh()
+                updated
+            } else {
+                val newRecord = DeviceRecord(
+                    deviceId = deviceId,
+                    deviceName = deviceName,
+                    isAdmin = isMaster,
+                    allowBackup = isMaster,
+                    allowLogout = isMaster,
+                    lastActive = System.currentTimeMillis()
+                )
+                val created = pocketBase.createRecord("devices", newRecord)
+                refresh()
+                created
+            }
+        } catch (e: Exception) {
+            Log.e("PocketBase", "registerOrUpdateCurrentDevice error", e)
+            null
+        }
+    }
+
+    suspend fun updateDevicePermissions(recordId: String, isAdmin: Boolean, allowBackup: Boolean, allowLogout: Boolean): Boolean {
+        return try {
+            val existing = _devicesFlow.value.find { it.id == recordId } ?: return false
+            val updated = existing.copy(
+                isAdmin = isAdmin,
+                allowBackup = allowBackup,
+                allowLogout = allowLogout
+            )
+            pocketBase.updateRecord("devices", recordId, updated)
+            refresh()
+            true
+        } catch (e: Exception) {
+            Log.e("PocketBase", "updateDevicePermissions error", e)
+            false
+        }
+    }
+
+    suspend fun deleteDeviceRecord(recordId: String): Boolean {
+        return try {
+            pocketBase.deleteRecordByFilter("devices", "id='$recordId'")
+            refresh()
+            true
+        } catch (e: Exception) {
+            Log.e("PocketBase", "deleteDeviceRecord error", e)
             false
         }
     }

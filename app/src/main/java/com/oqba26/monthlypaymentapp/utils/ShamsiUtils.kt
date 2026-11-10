@@ -7,6 +7,8 @@ import saman.zamani.persiandate.PersianDate
 import java.util.Date
 import java.util.Locale
 
+const val CYCLE_START_DAY = 28
+
 fun getCurrentShamsiYear(): Int = PersianDate().shYear
 fun getCurrentShamsiMonth(): Int = PersianDate().shMonth
 fun getCurrentShamsiDay(): Int = PersianDate().shDay
@@ -41,7 +43,7 @@ fun isTimestampInCurrentCycle(rawTimestamp: Long): Boolean {
     val curMonth = now.shMonth
     val curDay = now.shDay
 
-    val (startYear, startMonth) = if (curDay >= 20) {
+    val (startYear, startMonth) = if (curDay >= CYCLE_START_DAY) {
         curYear to curMonth
     } else {
         if (curMonth == 1) (curYear - 1) to 12 else curYear to (curMonth - 1)
@@ -58,8 +60,8 @@ fun isTimestampInCurrentCycle(rawTimestamp: Long): Boolean {
     val rMonth = recordDate.shMonth
     val rDay = recordDate.shDay
 
-    val isFirstHalf = (rYear == startYear && rMonth == startMonth && rDay >= 20)
-    val isSecondHalf = (rYear == endYear && rMonth == endMonth && rDay < 20)
+    val isFirstHalf = (rYear == startYear) && (rMonth == startMonth) && (rDay >= CYCLE_START_DAY)
+    val isSecondHalf = (rYear == endYear) && (rMonth == endMonth) && (rDay < CYCLE_START_DAY)
 
     return isFirstHalf || isSecondHalf
 }

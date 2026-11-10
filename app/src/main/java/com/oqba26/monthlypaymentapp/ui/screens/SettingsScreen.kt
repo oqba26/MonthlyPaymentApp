@@ -31,9 +31,16 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material3.Switch
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.oqba26.monthlypaymentapp.data.model.DeviceRecord
+import com.oqba26.monthlypaymentapp.utils.getDeviceHardwareId
+import com.oqba26.monthlypaymentapp.utils.getDeviceModelName
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -166,6 +173,32 @@ fun SettingsScreen(onLogout: () -> Unit) {
 
         val isOperatorMode by viewModel.isOperatorMode.collectAsState()
         val adminPin by viewModel.adminPin.collectAsState()
+        val isMasterDevice by viewModel.isMasterDevice.collectAsState()
+        val allowOperatorBackup by viewModel.allowOperatorBackup.collectAsState()
+        val allowOperatorLogout by viewModel.allowOperatorLogout.collectAsState()
+        val allDevices by viewModel.allDevices.collectAsState()
+        val deviceId = remember { getDeviceHardwareId(context) }
+        val deviceName = remember { getDeviceModelName() }
+
+        LaunchedEffect(Unit) {
+            viewModel.initDeviceSession(deviceId, deviceName)
+        }
+
+        if (!isOperatorMode || isMasterDevice) {
+            MasterAdminSetting(
+                deviceId = deviceId,
+                deviceName = deviceName,
+                isMasterDevice = isMasterDevice,
+                devicesList = allDevices,
+                onActivateMaster = { viewModel.verifyAndActivateMasterDevice(it, deviceId, deviceName) },
+                onDeactivateMaster = { viewModel.deactivateMasterDevice() },
+                onChangeMasterKey = { old, new -> viewModel.changeMasterKey(old, new) },
+                onToggleDeviceAdmin = { viewModel.toggleDeviceAdmin(it) },
+                onToggleDeviceBackup = { viewModel.toggleDeviceBackup(it) },
+                onToggleDeviceLogout = { viewModel.toggleDeviceLogout(it) },
+                onDeleteDevice = { viewModel.deleteDevice(it) }
+            )
+        }
 
         OperatorModeSetting(
             isOperatorMode = isOperatorMode,
@@ -193,7 +226,8 @@ fun SettingsScreen(onLogout: () -> Unit) {
             onFontSelected = { viewModel.onFontSelected(it) }
         )
 
-        if (!isOperatorMode) {
+        val canShowBackup = !isOperatorMode || allowOperatorBackup
+        if (canShowBackup) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             Text(
@@ -234,17 +268,20 @@ fun SettingsScreen(onLogout: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        val canShowLogout = !isOperatorMode || allowOperatorLogout
+        if (canShowLogout) {
+            Spacer(Modifier.height(8.dp))
 
-        Button(
-            onClick = onLogout,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-            contentPadding = PaddingValues(vertical = 12.dp)
-        ) {
-            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.logout))
+            Button(
+                onClick = onLogout,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                contentPadding = PaddingValues(vertical = 12.dp)
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.logout))
+            }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -802,6 +839,405 @@ fun OperatorModeSetting(
 private enum class PinAction { UNLOCK_ADMIN, CHANGE_PIN }
 
 @Composable
+fun MasterAdminSetting(
+    deviceId: String,
+    deviceName: String,
+    isMasterDevice: Boolean,
+    devicesList: List<DeviceRecord>,
+    onActivateMaster: (String) -> Unit,
+    onDeactivateMaster: () -> Unit,
+    onChangeMasterKey: (String, String) -> Unit,
+    onToggleDeviceAdmin: (DeviceRecord) -> Unit,
+    onToggleDeviceBackup: (DeviceRecord) -> Unit,
+    onToggleDeviceLogout: (DeviceRecord) -> Unit,
+    onDeleteDevice: (DeviceRecord) -> Unit
+) {
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    var showActivateDialog by remember { mutableStateOf(false) }
+    var showChangeKeyDialog by remember { mutableStateOf(false) }
+    var enteredKey by remember { mutableStateOf("") }
+    var oldKeyInput by remember { mutableStateOf("") }
+    var newKeyInput by remember { mutableStateOf("") }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isMasterDevice) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (isMasterDevice) Icons.Default.VerifiedUser else Icons.Default.Security,
+                        contentDescription = null,
+                        tint = if (isMasterDevice) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "مدیریت ارشد و دستگاه‌ها",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Surface(
+                    color = if (isMasterDevice) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = if (isMasterDevice) "مدیر کل (تأییدشده)" else "دستگاه عادی",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isMasterDevice) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "این دستگاه: $deviceName",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "شناسه: $deviceId",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(deviceId))
+                            Toast.makeText(context, "شناسه دستگاه کپی شد", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "کپی شناسه دستگاه",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(thickness = 0.5.dp)
+
+            if (isMasterDevice) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "دستگاه‌های متصل و دسترسی‌ها:",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "${devicesList.size} دستگاه",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+
+                val otherDevices = devicesList.filter { (_, dId) -> dId != deviceId }
+                if (otherDevices.isEmpty()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                    ) {
+                        Text(
+                            text = "هنوز دستگاه دیگری به این حساب متصل نشده است.\nبه محض نصب برنامه روی گوشی دیگر، در این بخش نمایش داده خواهد شد.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                } else {
+                    otherDevices.forEach { dev ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (dev.isAdmin) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                                else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.PhoneAndroid,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                            tint = if (dev.isAdmin) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = dev.deviceName.ifBlank { "گوشی متصل" },
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = { onDeleteDevice(dev) },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "حذف دستگاه",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                if (dev.lastActive > 0L) {
+                                    Text(
+                                        text = "آخرین فعالیت: ${formatTimestampToPersianDateTime(dev.lastActive)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+
+                                HorizontalDivider(thickness = 0.5.dp)
+
+                                // سوئیچ ۱: دسترسی ادمین
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "دسترسی مدیریت کامل (مدیر)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Switch(
+                                        checked = dev.isAdmin,
+                                        onCheckedChange = { onToggleDeviceAdmin(dev) }
+                                    )
+                                }
+
+                                // سوئیچ ۲: اجازه پشتیبان‌گیری
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "امکان پشتیبان‌گیری و بازیابی",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Switch(
+                                        checked = dev.allowBackup,
+                                        onCheckedChange = { onToggleDeviceBackup(dev) }
+                                    )
+                                }
+
+                                // سوئیچ ۳: اجازه خروج از حساب
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "امکان خروج از حساب کاربری",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Switch(
+                                        checked = dev.allowLogout,
+                                        onCheckedChange = { onToggleDeviceLogout(dev) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = {
+                        oldKeyInput = ""
+                        newKeyInput = ""
+                        showChangeKeyDialog = true
+                    }) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("تغییر رمز ارشد (Master Key)", style = MaterialTheme.typography.labelMedium)
+                    }
+
+                    TextButton(
+                        onClick = onDeactivateMaster,
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("لغو تأیید دستگاه", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            } else {
+                Text(
+                    text = "برای فعال‌سازی دسترسی مدیریت کامل و تنظیم اختیارات اپراتورها، این دستگاه را با رمز ارشد تأیید کنید.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+
+                Button(
+                    onClick = {
+                        enteredKey = ""
+                        showActivateDialog = true
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Default.VerifiedUser, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("تأیید دستگاه به عنوان مدیر ارشد", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+
+    if (showActivateDialog) {
+        Dialog(onDismissRequest = { showActivateDialog = false }) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "ورود رمز ارشد مدیر کل",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "رمز ارشد (Master Key) را برای تأیید این دستگاه وارد کنید:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        OutlinedTextField(
+                            value = enteredKey,
+                            onValueChange = { enteredKey = it },
+                            label = { Text("رمز ارشد (Master Key)") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = { showActivateDialog = false }) {
+                                Text("انصراف")
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Button(onClick = {
+                                onActivateMaster(enteredKey)
+                                showActivateDialog = false
+                            }) {
+                                Text("تأیید")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showChangeKeyDialog) {
+        Dialog(onDismissRequest = { showChangeKeyDialog = false }) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "تغییر رمز ارشد (Master Key)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        OutlinedTextField(
+                            value = oldKeyInput,
+                            onValueChange = { oldKeyInput = it },
+                            label = { Text("رمز ارشد فعلی") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = newKeyInput,
+                            onValueChange = { newKeyInput = it },
+                            label = { Text("رمز ارشد جدید") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = { showChangeKeyDialog = false }) {
+                                Text("انصراف")
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Button(onClick = {
+                                onChangeMasterKey(oldKeyInput, newKeyInput)
+                                showChangeKeyDialog = false
+                            }) {
+                                Text("ذخیره رمز")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun FontSelectionDropdown(selectedFont: String, onFontSelected: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val fonts = listOf("Estedad", "Vazirmatn", "BYekan", "Sahel", "IranianSans")
@@ -818,3 +1254,4 @@ fun FontSelectionDropdown(selectedFont: String, onFontSelected: (String) -> Unit
         }
     }
 }
+

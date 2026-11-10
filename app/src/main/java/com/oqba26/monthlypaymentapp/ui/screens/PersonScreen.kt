@@ -64,6 +64,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.oqba26.monthlypaymentapp.ui.components.*
+import com.oqba26.monthlypaymentapp.utils.CYCLE_START_DAY
 import com.oqba26.monthlypaymentapp.utils.formatNumberAsPersian
 import com.oqba26.monthlypaymentapp.utils.formatTimestampToPersianDateTime
 import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiDay
@@ -292,7 +293,7 @@ fun PersonScreen(
         val isMosque = currentCategory == "mosque"
         val currentDay = getCurrentShamsiDay()
         val currentMonth = getCurrentShamsiMonth()
-        val targetMonth = if (isMosque) currentMonth else (if (currentDay >= 20) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1)
+        val targetMonth = if (isMosque) currentMonth else (if (currentDay >= CYCLE_START_DAY) currentMonth else if (currentMonth == 1) 12 else currentMonth - 1)
 
         val monthName = getPersianMonthName(targetMonth)
         val currentDateTime = formatTimestampToPersianDateTime(System.currentTimeMillis())
@@ -485,7 +486,7 @@ fun DashboardCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (isMosqueCategory) "مجموع کمک‌های جمع‌آوری شده دوره جاری" else "مجموع حقوق جمع‌آوری شده دوره جاری",
+                    text = if (isMosqueCategory) "کمک‌های جمع‌آوری شده دوره جاری" else "حقوق جمع‌آوری شده دوره جاری",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )

@@ -29,12 +29,18 @@ class SettingsRepository(context: Context) {
         val IGNORED_CONTACT_SUGGESTIONS = stringPreferencesKey("ignored_contact_suggestions")
         val IS_OPERATOR_MODE = booleanPreferencesKey("is_operator_mode")
         val ADMIN_PIN = stringPreferencesKey("admin_pin")
+        val MASTER_KEY = stringPreferencesKey("master_key")
+        val IS_MASTER_DEVICE = booleanPreferencesKey("is_master_device")
+        val MASTER_DEVICE_ID = stringPreferencesKey("master_device_id")
+        val ALLOW_OPERATOR_BACKUP = booleanPreferencesKey("allow_operator_backup")
+        val ALLOW_OPERATOR_LOGOUT = booleanPreferencesKey("allow_operator_logout")
 
         /** آخرین versionCodeی که با آن اجرا شده — مبنای تشخیص ارتقای نسخه برای گرفتن snapshot. */
         val LAST_RUN_VERSION_CODE = intPreferencesKey("last_run_version_code")
 
         const val FALLBACK_AMOUNT = 200000.0
         const val DEFAULT_FONT = "Estedad"
+        const val DEFAULT_MASTER_KEY = "Admin@2026"
     }
 
     suspend fun getLastRunVersionCode(): Int? = dataStore.data.first()[LAST_RUN_VERSION_CODE]
@@ -134,5 +140,44 @@ class SettingsRepository(context: Context) {
 
     suspend fun setAdminPin(pin: String) {
         dataStore.edit { it[ADMIN_PIN] = pin }
+    }
+
+    val isMasterDeviceFlow: Flow<Boolean> = dataStore.data.map {
+        it[IS_MASTER_DEVICE] ?: false
+    }
+
+    val masterKeyFlow: Flow<String> = dataStore.data.map {
+        it[MASTER_KEY] ?: DEFAULT_MASTER_KEY
+    }
+
+    val allowOperatorBackupFlow: Flow<Boolean> = dataStore.data.map {
+        it[ALLOW_OPERATOR_BACKUP] ?: false
+    }
+
+    val allowOperatorLogoutFlow: Flow<Boolean> = dataStore.data.map {
+        it[ALLOW_OPERATOR_LOGOUT] ?: false
+    }
+
+    suspend fun setMasterDevice(isMaster: Boolean, deviceId: String? = null) {
+        dataStore.edit {
+            it[IS_MASTER_DEVICE] = isMaster
+            if (deviceId != null) {
+                it[MASTER_DEVICE_ID] = deviceId
+            } else if (!isMaster) {
+                it.remove(MASTER_DEVICE_ID)
+            }
+        }
+    }
+
+    suspend fun setMasterKey(newKey: String) {
+        dataStore.edit { it[MASTER_KEY] = newKey }
+    }
+
+    suspend fun setAllowOperatorBackup(allow: Boolean) {
+        dataStore.edit { it[ALLOW_OPERATOR_BACKUP] = allow }
+    }
+
+    suspend fun setAllowOperatorLogout(allow: Boolean) {
+        dataStore.edit { it[ALLOW_OPERATOR_LOGOUT] = allow }
     }
 }
