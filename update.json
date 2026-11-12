@@ -2,6 +2,6 @@
   "versionCode": 20,
   "versionName": "1.1.9",
   "url": "https://git.mizbanplatform.ir/oqba26/MonthlyPaymentApp/releases/download/v1.1.9/MonthlyPaymentApp-v1.1.9.apk",
-  "releaseNotes": "افزودن سیستم اعلان لحظه‌ای ثبت پرداخت‌ها برای مدیر و بهینه‌سازی همگام‌سازی پس‌زمینه",
+  "releaseNotes": "رفع باگ حذف پرداخت‌ها و پایداری همگام‌سازی",
   "isForceUpdate": false
 }
