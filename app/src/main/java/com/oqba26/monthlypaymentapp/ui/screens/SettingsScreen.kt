@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.VerifiedUser
@@ -206,6 +207,14 @@ fun SettingsScreen(onLogout: () -> Unit) {
             onToggleMode = { viewModel.setOperatorMode(it) },
             onChangePin = { viewModel.setAdminPin(it) }
         )
+
+        val realtimeNotificationsEnabled by viewModel.realtimeNotificationsEnabled.collectAsState()
+        if (!isOperatorMode || isMasterDevice) {
+            RealtimeNotificationsSetting(
+                enabled = realtimeNotificationsEnabled,
+                onToggle = { viewModel.toggleRealtimeNotifications(it) }
+            )
+        }
 
         val reminderDay by viewModel.reminderDay.collectAsState()
         ReminderDaySetting(
@@ -1251,6 +1260,57 @@ fun FontSelectionDropdown(selectedFont: String, onFontSelected: (String) -> Unit
             fonts.forEach { fontName ->
                 DropdownMenuItem(text = { Text(fontName) }, onClick = { onFontSelected(fontName); expanded = false })
             }
+        }
+    }
+}
+
+@Composable
+fun RealtimeNotificationsSetting(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.NotificationsActive,
+                    contentDescription = null,
+                    tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "اعلان لحظه‌ای ثبت پرداخت‌ها",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "ارسال اعلان با صدا و ویبره هنگام ثبت پرداخت توسط اوپراتورها",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle
+            )
         }
     }
 }

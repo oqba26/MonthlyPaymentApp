@@ -19,6 +19,9 @@ interface PersonDao {
     @Query("SELECT * FROM persons WHERE id = :id LIMIT 1")
     fun getPersonByIdFlow(id: String): Flow<Person?>
 
+    @Query("SELECT * FROM persons WHERE id = :id LIMIT 1")
+    suspend fun getPersonById(id: String): Person?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(persons: List<Person>)
 

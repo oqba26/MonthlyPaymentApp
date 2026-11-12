@@ -153,6 +153,9 @@ fun MainAppHost(viewModel: PersonViewModel) {
     val requiredPermissions = mutableListOf(
         Manifest.permission.READ_CONTACTS
     ).apply {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(Manifest.permission.POST_NOTIFICATIONS)
+        }
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S_V2) {
             add(Manifest.permission.READ_EXTERNAL_STORAGE)
             add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
@@ -313,6 +316,16 @@ fun AuthenticatedContent(viewModel: PersonViewModel, contactViewModel: ContactVi
     val navController = rememberNavController()
     var showExitDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val activity = context as? ComponentActivity
+
+    LaunchedEffect(Unit) {
+        com.oqba26.monthlypaymentapp.core.service.RealtimeSyncService.start(context)
+        val targetPersonId = activity?.intent?.getStringExtra("PERSON_ID")
+        if (!targetPersonId.isNullOrBlank()) {
+            activity.intent?.removeExtra("PERSON_ID")
+            navController.navigate("person_detail/$targetPersonId")
+        }
+    }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: ""

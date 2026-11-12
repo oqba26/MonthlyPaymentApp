@@ -13,6 +13,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.oqba26.monthlypaymentapp.core.service.RealtimeSyncService
+import kotlinx.coroutines.flow.first
+
 @HiltAndroidApp
 class PaymentApplication : Application() {
     @Inject
@@ -30,6 +33,24 @@ class PaymentApplication : Application() {
         super.onCreate()
         syncManager.startSync()
         snapshotOnUpgrade()
+        startRealtimeServiceIfEnabled()
+    }
+
+    private fun startRealtimeServiceIfEnabled() {
+        appScope.launch {
+            try {
+                settingsRepository.authTokenFlow.collect { token ->
+                    if (token != null) {
+                        val isEnabled = settingsRepository.realtimeNotificationsEnabledFlow.first()
+                        if (isEnabled) {
+                            RealtimeSyncService.start(this@PaymentApplication)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("PaymentApplication", "خطا در شروع RealtimeSyncService", e)
+            }
+        }
     }
 
     /**

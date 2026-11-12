@@ -33,6 +33,9 @@ class LocalPersonRepository(
     fun getPaymentsForPersonFlow(personId: String): Flow<List<PaymentRecord>> =
         paymentDao.getPaymentsForPersonFlow(personId)
 
+    suspend fun getPaymentById(paymentId: String): PaymentRecord? = paymentDao.getPaymentById(paymentId)
+    suspend fun getPersonById(personId: String): Person? = personDao.getPersonById(personId)
+
     /**
      * ادغام غیرمخربِ داده‌ی سرور با داده‌ی محلی.
      *

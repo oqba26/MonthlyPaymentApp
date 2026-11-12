@@ -19,6 +19,9 @@ interface PaymentDao {
     @Query("SELECT * FROM payments WHERE personId = :personId ORDER BY timestamp DESC")
     fun getPaymentsForPersonFlow(personId: String): Flow<List<PaymentRecord>>
 
+    @Query("SELECT * FROM payments WHERE id = :paymentId LIMIT 1")
+    suspend fun getPaymentById(paymentId: String): PaymentRecord?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllPaymentRecords(payments: List<PaymentRecord>)
 

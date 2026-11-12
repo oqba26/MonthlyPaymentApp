@@ -17,6 +17,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Collections
 import java.util.UUID
+import com.oqba26.monthlypaymentapp.data.remote.PocketBaseRealtimeEvent
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlin.time.Duration.Companion.milliseconds
 
 class NetworkRepository(
@@ -28,6 +32,12 @@ class NetworkRepository(
     private val _paymentsFlow = MutableStateFlow<List<PaymentRecord>>(emptyList())
     private val _devicesFlow = MutableStateFlow<List<DeviceRecord>>(emptyList())
     fun getDevicesFlow(): Flow<List<DeviceRecord>> = _devicesFlow.asStateFlow()
+
+    private val _realtimeEvents = MutableSharedFlow<PocketBaseRealtimeEvent>(extraBufferCapacity = 64)
+    val realtimeEvents: SharedFlow<PocketBaseRealtimeEvent> = _realtimeEvents.asSharedFlow()
+
+    @Volatile
+    private var isObservingRealtime = false
 
     private val deletedPaymentIds = Collections.synchronizedSet(mutableSetOf<String>())
     private val deletedPersonIds = Collections.synchronizedSet(mutableSetOf<String>())
@@ -51,11 +61,14 @@ class NetworkRepository(
 
     // --- Realtime Operations ---
     fun observeRealtimeChanges() {
+        if (isObservingRealtime) return
+        isObservingRealtime = true
         repositoryScope.launch {
             while (true) {
                 try {
-                    pocketBase.listenRealtime(listOf("persons", "payments", "devices")).collect { event ->
-                        Log.d("PocketBase-Realtime", "Change detected in PocketBase: $event")
+                    pocketBase.listenRealtimeEvents(listOf("persons", "payments", "devices")).collect { event ->
+                        Log.d("PocketBase-Realtime", "Change detected in PocketBase: ${event.event} / ${event.action}")
+                        _realtimeEvents.emit(event)
                         refresh()
                     }
                 } catch (e: Exception) {

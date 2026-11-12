@@ -9,6 +9,9 @@ import com.oqba26.monthlypaymentapp.data.model.DeviceRecord
 import com.oqba26.monthlypaymentapp.data.repository.LocalPersonRepository
 import com.oqba26.monthlypaymentapp.data.repository.NetworkRepository
 import com.oqba26.monthlypaymentapp.data.repository.SettingsRepository
+import android.content.Context
+import com.oqba26.monthlypaymentapp.core.service.RealtimeSyncService
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -30,6 +33,7 @@ class SettingsViewModel @Inject constructor(
     private val localPersonRepository: LocalPersonRepository,
     private val backupManager: BackupManager,
     private val networkRepository: NetworkRepository,
+    @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     private val json = Json {
@@ -62,6 +66,20 @@ class SettingsViewModel @Inject constructor(
 
     val masterKey: StateFlow<String> = settingsRepository.masterKeyFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), SettingsRepository.DEFAULT_MASTER_KEY)
+
+    val realtimeNotificationsEnabled: StateFlow<Boolean> = settingsRepository.realtimeNotificationsEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), initialValue = true)
+
+    fun toggleRealtimeNotifications(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setRealtimeNotificationsEnabled(enabled)
+            if (enabled) {
+                RealtimeSyncService.start(context)
+            } else {
+                RealtimeSyncService.stop(context)
+            }
+        }
+    }
 
     val allowOperatorBackup: StateFlow<Boolean> = settingsRepository.allowOperatorBackupFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), initialValue = false)

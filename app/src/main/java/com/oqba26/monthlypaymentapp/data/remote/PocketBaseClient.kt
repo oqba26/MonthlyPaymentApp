@@ -1,6 +1,8 @@
-@file:OptIn(InternalSerializationApi::class)
+@file:SuppressLint("UnsafeOptInUsageError")
 
 package com.oqba26.monthlypaymentapp.data.remote
+
+import android.annotation.SuppressLint
 
 import android.util.Log
 import io.ktor.client.HttpClient
@@ -28,7 +30,6 @@ import io.ktor.utils.io.readUTF8Line
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -63,11 +64,18 @@ data class PocketBaseSubscribeRequest(
     val subscriptions: List<String>,
 )
 
+@Serializable
+data class PocketBaseRealtimeEvent(
+    val event: String,
+    val action: String = "",
+    val recordJson: String = "",
+)
+
 /**
  * کلاینت اختصاصی جهت ارتباط با APIهای REST و سیستم ریل‌تایم (SSE) بک‌اند PocketBase
  */
 class PocketBaseClient(
-    val baseUrl: String = POCKETBASE_DEFAULT_URL
+    val baseUrl: String = POCKETBASE_DEFAULT_URL,
 ) {
     companion object {
         const val POCKETBASE_DEFAULT_URL = "http://194.146.68.50/"
@@ -189,8 +197,7 @@ class PocketBaseClient(
         }
 
         val bodyText = response.bodyAsText()
-        val listResp = json.decodeFromString<PocketBaseListResponse<T>>(bodyText)
-        return listResp.items
+        return json.decodeFromString<PocketBaseListResponse<T>>(bodyText).items
     }
 
     /**
@@ -283,7 +290,7 @@ class PocketBaseClient(
                 val jsonText = searchResp.bodyAsText()
                 val parsed = json.parseToJsonElement(jsonText).jsonObject
                 val items = parsed["items"]?.jsonArray
-                if (!items.isNullOrEmpty()) {
+                return if (!items.isNullOrEmpty()) {
                     var allDeleted = true
                     for (item in items) {
                         val pbId = item.jsonObject["id"]?.jsonPrimitive?.content
@@ -292,10 +299,10 @@ class PocketBaseClient(
                             if (!ok) allDeleted = false
                         }
                     }
-                    return allDeleted
+                    allDeleted
                 } else {
                     // هیچ رکوردی با این مشخصات روی سرور نیست (یا قبلاً حذف شده)؛ وضعیت نهایی حاصل است
-                    return true
+                    true
                 }
             }
             false
@@ -333,11 +340,9 @@ class PocketBaseClient(
                 }
             }
 
-            if (existingPbId != null) {
-                updateRecord(collectionName, existingPbId, body)
-            } else {
-                createRecord(collectionName, body)
-            }
+            existingPbId?.let {
+                updateRecord(collectionName, it, body)
+            } ?: createRecord(collectionName, body)
         } catch (e: Exception) {
             Log.e(TAG, "خطا در upsert برای $collectionName ($filterQuery)", e)
             throw e
@@ -345,9 +350,9 @@ class PocketBaseClient(
     }
 
     /**
-     * اتصال ریل‌تایم SSE
+     * اتصال ریل‌تایم SSE با جزئیات رویداد و محتوا
      */
-    fun listenRealtime(subscriptions: List<String>): Flow<String> = flow {
+    fun listenRealtimeEvents(subscriptions: List<String>): Flow<PocketBaseRealtimeEvent> = flow {
         val cleanBaseUrl = baseUrl.trimEnd('/')
         while (true) {
             try {
@@ -372,12 +377,27 @@ class PocketBaseClient(
                         } else if (trimmed.startsWith("data:")) {
                             val dataJson = trimmed.substringAfter("data:").trim()
                             if (currentEvent == "PB_CONNECT") {
-                                val connectObj = json.decodeFromString<PocketBaseConnectEvent>(dataJson)
-                                subscribeRealtime(cleanBaseUrl, connectObj.clientId, subscriptions)
-                                Log.d(TAG, "اتصال ریل‌تایم برقرار شد. ClientId: ${connectObj.clientId}")
-                                emit("PB_CONNECT")
+                                val (clientId) = json.decodeFromString<PocketBaseConnectEvent>(dataJson)
+                                subscribeRealtime(cleanBaseUrl, clientId, subscriptions)
+                                Log.d(TAG, "اتصال ریل‌تایم برقرار شد. ClientId: $clientId")
+                                emit(PocketBaseRealtimeEvent(event = "PB_CONNECT"))
                             } else if (currentEvent.isNotEmpty()) {
-                                emit(currentEvent)
+                                var action = ""
+                                var recordJson = ""
+                                try {
+                                    val parsed = json.parseToJsonElement(dataJson).jsonObject
+                                    action = parsed["action"]?.jsonPrimitive?.content ?: ""
+                                    recordJson = parsed["record"]?.toString() ?: ""
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "خطا در پارس dataJson ریل‌تایم: $dataJson", e)
+                                }
+                                emit(
+                                    PocketBaseRealtimeEvent(
+                                        event = currentEvent,
+                                        action = action,
+                                        recordJson = recordJson
+                                    )
+                                )
                             }
                         }
                     }

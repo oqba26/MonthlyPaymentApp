@@ -34,6 +34,7 @@ class SettingsRepository(context: Context) {
         val MASTER_DEVICE_ID = stringPreferencesKey("master_device_id")
         val ALLOW_OPERATOR_BACKUP = booleanPreferencesKey("allow_operator_backup")
         val ALLOW_OPERATOR_LOGOUT = booleanPreferencesKey("allow_operator_logout")
+        val REALTIME_NOTIFICATIONS_ENABLED = booleanPreferencesKey("realtime_notifications_enabled")
 
         /** آخرین versionCodeی که با آن اجرا شده — مبنای تشخیص ارتقای نسخه برای گرفتن snapshot. */
         val LAST_RUN_VERSION_CODE = intPreferencesKey("last_run_version_code")
@@ -179,5 +180,13 @@ class SettingsRepository(context: Context) {
 
     suspend fun setAllowOperatorLogout(allow: Boolean) {
         dataStore.edit { it[ALLOW_OPERATOR_LOGOUT] = allow }
+    }
+
+    val realtimeNotificationsEnabledFlow: Flow<Boolean> = dataStore.data.map {
+        it[REALTIME_NOTIFICATIONS_ENABLED] ?: true
+    }
+
+    suspend fun setRealtimeNotificationsEnabled(enabled: Boolean) {
+        dataStore.edit { it[REALTIME_NOTIFICATIONS_ENABLED] = enabled }
     }
 }
