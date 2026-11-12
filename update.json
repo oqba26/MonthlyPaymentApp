@@ -1,7 +1,7 @@
 {
-  "versionCode": 20,
-  "versionName": "1.1.9",
-  "url": "https://git.mizbanplatform.ir/oqba26/MonthlyPaymentApp/releases/download/v1.1.9/MonthlyPaymentApp-v1.1.9.apk",
-  "releaseNotes": "رفع باگ حذف پرداخت‌ها و پایداری همگام‌سازی",
+  "versionCode": 21,
+  "versionName": "1.2.0",
+  "url": "https://git.mizbanplatform.ir/oqba26/MonthlyPaymentApp/releases/download/v1.2.0/MonthlyPaymentApp-v1.2.0.apk",
+  "releaseNotes": "حذف اعلان دائمی بالای گوشی، استفاده از WorkManager برای بررسی بهینه و سبک پرداخت‌های جدید در پس‌زمینه",
   "isForceUpdate": false
 }

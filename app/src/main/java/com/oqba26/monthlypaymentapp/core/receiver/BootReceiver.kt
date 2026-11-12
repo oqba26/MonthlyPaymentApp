@@ -3,7 +3,7 @@ package com.oqba26.monthlypaymentapp.core.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.oqba26.monthlypaymentapp.core.service.RealtimeSyncService
+import com.oqba26.monthlypaymentapp.core.worker.PaymentSyncWorker
 import com.oqba26.monthlypaymentapp.data.repository.SettingsRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -25,8 +25,8 @@ class BootReceiver : BroadcastReceiver() {
             CoroutineScope(Dispatchers.IO).launch {
                 val token = settingsRepository.authTokenFlow.first()
                 val isEnabled = settingsRepository.realtimeNotificationsEnabledFlow.first()
-                if (token != null && isEnabled) {
-                    RealtimeSyncService.start(context)
+                if ((token != null) && isEnabled) {
+                    PaymentSyncWorker.schedule(context)
                 }
             }
         }

@@ -9,6 +9,8 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.activity.ComponentActivity
+import com.oqba26.monthlypaymentapp.core.service.RealtimeSyncService
+import com.oqba26.monthlypaymentapp.core.worker.PaymentSyncWorker
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -319,7 +321,8 @@ fun AuthenticatedContent(viewModel: PersonViewModel, contactViewModel: ContactVi
     val activity = context as? ComponentActivity
 
     LaunchedEffect(Unit) {
-        com.oqba26.monthlypaymentapp.core.service.RealtimeSyncService.start(context)
+        RealtimeSyncService.stop(context)
+        PaymentSyncWorker.schedule(context)
         val targetPersonId = activity?.intent?.getStringExtra("PERSON_ID")
         if (!targetPersonId.isNullOrBlank()) {
             activity.intent?.removeExtra("PERSON_ID")

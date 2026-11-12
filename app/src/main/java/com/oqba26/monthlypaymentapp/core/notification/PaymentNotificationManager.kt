@@ -25,8 +25,7 @@ class PaymentNotificationManager @Inject constructor(
 ) {
     companion object {
         const val CHANNEL_PAYMENT_ALERTS = "payment_alerts_channel"
-        const val CHANNEL_SERVICE = "realtime_sync_channel"
-        const val FOREGROUND_SERVICE_NOTIFICATION_ID = 9001
+        const val OLD_FOREGROUND_SERVICE_NOTIFICATION_ID = 9001
     }
 
     private val notificationManager =
@@ -34,11 +33,18 @@ class PaymentNotificationManager @Inject constructor(
 
     init {
         createNotificationChannels()
+        // حذف اعلان و کانال قدیمی سرویس دائم
+        try {
+            notificationManager.cancel(OLD_FOREGROUND_SERVICE_NOTIFICATION_ID)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                notificationManager.deleteNotificationChannel("realtime_sync_channel")
+            }
+        } catch (_: Exception) { }
     }
 
     fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // ۱. کانال اعلان‌های پرداخت با اولویت بالا همراه با صدا و ویبره
+            // کانال اعلان‌های پرداخت با اولویت بالا همراه با صدا و ویبره
             val alertSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             val audioAttributes = AudioAttributes.Builder()
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -48,7 +54,7 @@ class PaymentNotificationManager @Inject constructor(
             val alertChannel = NotificationChannel(
                 CHANNEL_PAYMENT_ALERTS,
                 "اعلان‌های پرداخت جدید",
-                NotificationManager.IMPORTANCE_HIGH
+                NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 description = "اطلاع‌رسانی هنگام ثبت پرداخت‌های جدید توسط اوپراتورها"
                 enableVibration(true)
@@ -58,40 +64,7 @@ class PaymentNotificationManager @Inject constructor(
                 setShowBadge(true)
             }
             notificationManager.createNotificationChannel(alertChannel)
-
-            // ۲. کانال سرویس همگام‌سازی پس‌زمینه (کم‌اولویت و بی‌صدا)
-            val serviceChannel = NotificationChannel(
-                CHANNEL_SERVICE,
-                "همگام‌سازی لحظه‌ای",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "سرویس فعال نگه‌داشتن همگام‌سازی لحظه‌ای با سرور"
-                setShowBadge(false)
-            }
-            notificationManager.createNotificationChannel(serviceChannel)
         }
-    }
-
-    fun getForegroundServiceNotification(): Notification {
-        val launchIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            0,
-            launchIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
-        return NotificationCompat.Builder(context, CHANNEL_SERVICE)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("مدیریت پرداخت ماهانه")
-            .setContentText("همگام‌سازی لحظه‌ای فعال است")
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .setContentIntent(pendingIntent)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .build()
     }
 
     @android.annotation.SuppressLint("MissingPermission")
@@ -99,7 +72,7 @@ class PaymentNotificationManager @Inject constructor(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (androidx.core.content.ContextCompat.checkSelfPermission(
                     context,
-                    android.Manifest.permission.POST_NOTIFICATIONS
+                    android.Manifest.permission.POST_NOTIFICATIONS,
                 ) != android.content.pm.PackageManager.PERMISSION_GRANTED
             ) {
                 return
@@ -123,7 +96,7 @@ class PaymentNotificationManager @Inject constructor(
             context,
             payment.id.hashCode(),
             launchIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
         val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)

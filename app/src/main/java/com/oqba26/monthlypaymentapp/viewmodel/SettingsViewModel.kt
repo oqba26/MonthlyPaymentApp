@@ -10,7 +10,7 @@ import com.oqba26.monthlypaymentapp.data.repository.LocalPersonRepository
 import com.oqba26.monthlypaymentapp.data.repository.NetworkRepository
 import com.oqba26.monthlypaymentapp.data.repository.SettingsRepository
 import android.content.Context
-import com.oqba26.monthlypaymentapp.core.service.RealtimeSyncService
+import com.oqba26.monthlypaymentapp.core.worker.PaymentSyncWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -74,9 +74,9 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setRealtimeNotificationsEnabled(enabled)
             if (enabled) {
-                RealtimeSyncService.start(context)
+                PaymentSyncWorker.schedule(context)
             } else {
-                RealtimeSyncService.stop(context)
+                PaymentSyncWorker.cancel(context)
             }
         }
     }

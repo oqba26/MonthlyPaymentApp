@@ -13,6 +13,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.oqba26.monthlypaymentapp.core.worker.PaymentSyncWorker
 import com.oqba26.monthlypaymentapp.core.service.RealtimeSyncService
 import kotlinx.coroutines.flow.first
 
@@ -33,22 +34,27 @@ class PaymentApplication : Application() {
         super.onCreate()
         syncManager.startSync()
         snapshotOnUpgrade()
-        startRealtimeServiceIfEnabled()
+        setupBackgroundSync()
     }
 
-    private fun startRealtimeServiceIfEnabled() {
+    private fun setupBackgroundSync() {
         appScope.launch {
             try {
+                // اطمینان از متوقف شدن سرویس قدیمی و حذف نوتیفیکیشن ثابت
+                RealtimeSyncService.stop(this@PaymentApplication)
+
                 settingsRepository.authTokenFlow.collect { token ->
                     if (token != null) {
                         val isEnabled = settingsRepository.realtimeNotificationsEnabledFlow.first()
                         if (isEnabled) {
-                            RealtimeSyncService.start(this@PaymentApplication)
+                            PaymentSyncWorker.schedule(this@PaymentApplication)
+                        } else {
+                            PaymentSyncWorker.cancel(this@PaymentApplication)
                         }
                     }
                 }
             } catch (e: Exception) {
-                Log.e("PaymentApplication", "خطا در شروع RealtimeSyncService", e)
+                Log.e("PaymentApplication", "خطا در زمان‌بندی همگام‌سازی پس‌زمینه", e)
             }
         }
     }
