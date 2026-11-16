@@ -1,7 +1,8 @@
 {
-  "versionCode": 22,
-  "versionName": "1.2.1",
-  "url": "https://git.mizbanplatform.ir/oqba26/MonthlyPaymentApp/releases/download/v1.2.1/MonthlyPaymentApp-v1.2.1.apk",
-  "releaseNotes": "رفع باگ حذف پرداخت‌ها و پایداری همگام‌سازی",
-  "isForceUpdate": false
+  "versionCode": 23,
+  "versionName": "1.2.2",
+  "url": "https://git.mizbanplatform.ir/oqba26/MonthlyPaymentApp/releases/download/v1.2.2/MonthlyPaymentApp-v1.2.2.apk",
+  "releaseNotes": "ارتقای سیستم جستجوی صوتی و هوشمندسازی تطابق اسامی فارسی با تشابه‌های آوایی",
+  "isForceUpdate": false,
+  "adminOnly": false
 }

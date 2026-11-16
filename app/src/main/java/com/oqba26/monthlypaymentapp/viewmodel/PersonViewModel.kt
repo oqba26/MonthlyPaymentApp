@@ -17,6 +17,7 @@ import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiMonth
 import com.oqba26.monthlypaymentapp.utils.getCurrentShamsiYear
 import com.oqba26.monthlypaymentapp.utils.getPersianMonthName
 import com.oqba26.monthlypaymentapp.utils.isTimestampInCurrentCycle
+import com.oqba26.monthlypaymentapp.utils.matchesPersianSearch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.coroutineScope
@@ -319,8 +320,8 @@ class PersonViewModel @Inject constructor(
                     monthlyReports = monthlyReportsList
                 )
 
-                val filteredPaid = if (query.isBlank()) paidModels else paidModels.filter { it.name.contains(query, ignoreCase = true) }
-                val filteredUnpaid = if (query.isBlank()) unpaidModels else unpaidModels.filter { it.name.contains(query, ignoreCase = true) }
+                val filteredPaid = if (query.isBlank()) paidModels else paidModels.filter { matchesPersianSearch(it.name, query) }
+                val filteredUnpaid = if (query.isBlank()) unpaidModels else unpaidModels.filter { matchesPersianSearch(it.name, query) }
 
                 val archivedPersons = persons.filter { it.isArchived && it.category == category }.map { person ->
                     val displayName = if (person.isAnonymous && category == "mosque") {

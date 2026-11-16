@@ -28,7 +28,7 @@ fun String.toPersianDigits(): String {
 fun String.normalizePhoneNumber(): String {
     // فقط اعداد را نگه دار
     val digitsOnly = this.filter { it.isDigit() }
-    
+
     // اگر با 98 شروع می‌شد، آن را به 0 تبدیل کن (فرمت رایج موبایل در ایران)
     return when {
         digitsOnly.startsWith("98") -> "0${digitsOnly.substring(2)}"
@@ -66,14 +66,92 @@ fun calculateLevenshteinDistance(s1: String, s2: String): Int {
 fun areNamesSimilar(name1: String, name2: String, threshold: Double = 0.4): Boolean {
     val n1 = name1.lowercase().trim()
     val n2 = name2.lowercase().trim()
-    
+
     // اگر یکی شامل دیگری باشد
     if (n1.contains(n2) || n2.contains(n1)) return true
-    
+
     val distance = calculateLevenshteinDistance(n1, n2)
     val maxLength = maxOf(n1.length, n2.length)
     if (maxLength == 0) return true
-    
+
     val normalizedDistance = distance.toDouble() / maxLength
     return normalizedDistance <= threshold
+}
+
+/**
+ * نرمال‌سازی حروف و کاراکترهای فارسی برای یکسان‌سازی جستجو
+ */
+fun String.normalizePersianText(): String {
+    return this.lowercase()
+        .replace('ي', 'ی')
+        .replace('ك', 'ک')
+        .replace('ة', 'ه')
+        .replace('أ', 'ا')
+        .replace('إ', 'ا')
+        .replace('آ', 'ا')
+        .replace('ئ', 'ی')
+        .replace('ؤ', 'و')
+        .replace('\u200c', ' ') // تبدیل نیم‌فاصله به فاصله
+        .replace(Regex("[\u064B-\u0652]"), "") // حذف اعراب
+        .trim()
+}
+
+/**
+ * بررسی هوشمند تطابق متن جستجو (تایپی یا صوتی) با نام شخص در دیتابیس
+ */
+fun matchesPersianSearch(targetName: String, query: String): Boolean {
+    if (query.isBlank()) return true
+    if (targetName.isBlank()) return false
+
+    val normTarget = targetName.normalizePersianText()
+    val normQuery = query.normalizePersianText()
+
+    // ۱. بررسی تطابق مستقیم یا شامل شدن زیررشته
+    if (normTarget.contains(normQuery, ignoreCase = true)) return true
+
+    // ۲. بررسی حالت فشرده (بدون فاصله)
+    val condensedTarget = normTarget.replace(Regex("\\s+"), "")
+    val condensedQuery = normQuery.replace(Regex("\\s+"), "")
+
+    if (condensedTarget.contains(condensedQuery, ignoreCase = true)) return true
+    if (condensedQuery.contains(condensedTarget, ignoreCase = true)) return true
+
+    // ۳. تطابق کلمه به کلمه (Token matching)
+    val queryTokens = normQuery.split(Regex("\\s+")).filter { it.isNotBlank() }
+    val targetTokens = normTarget.split(Regex("\\s+")).filter { it.isNotBlank() }
+
+    if (queryTokens.size > 1) {
+        // برای جستجوی چندکلمه‌ای (مثل "هادی از کندری" ↔ "هادی اسکندری" یا "امیر حسین"):
+        // الف) بررسی فاصله لون‌اشتاین روی کل عبارت فشرده
+        val dist = calculateLevenshteinDistance(condensedTarget, condensedQuery)
+        val maxAllowedDist = when {
+            condensedQuery.length <= 7 -> 1
+            condensedQuery.length <= 12 -> 2
+            else -> 3
+        }
+        if (dist <= maxAllowedDist) return true
+
+        // ب) بررسی اینکه آیا کلمات اصلی (غیر کلمات ربط) در نام هدف هستند
+        val mainQueryTokens = queryTokens.filter { it !in listOf("از", "به", "با", "در", "و") }
+        val matchedMainCount = mainQueryTokens.count { qToken ->
+            targetTokens.any { tToken ->
+                tToken.contains(qToken) || qToken.contains(tToken) ||
+                        (qToken.length >= 4 && calculateLevenshteinDistance(tToken, qToken) <= 1)
+            }
+        }
+        if (mainQueryTokens.isNotEmpty() && matchedMainCount == mainQueryTokens.size) {
+            return true
+        }
+    } else if (queryTokens.size == 1) {
+        // برای تک کلمه، بررسی شبیه بودن به یکی از کلمات نام
+        val qToken = queryTokens[0]
+        if (qToken.length >= 4) {
+            val matched = targetTokens.any { tToken ->
+                tToken.contains(qToken) || (tToken.length >= 4 && tToken.first() == qToken.first() && calculateLevenshteinDistance(tToken, qToken) <= 1)
+            }
+            if (matched) return true
+        }
+    }
+
+    return false
 }
