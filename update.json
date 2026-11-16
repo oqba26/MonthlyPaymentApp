@@ -2,7 +2,6 @@
   "versionCode": 22,
   "versionName": "1.2.1",
   "url": "https://git.mizbanplatform.ir/oqba26/MonthlyPaymentApp/releases/download/v1.2.1/MonthlyPaymentApp-v1.2.1.apk",
-  "releaseNotes": "رفع مشکل همگام‌سازی با سرور و بهبود پایداری ارتباط شبکه",
-  "isForceUpdate": false,
-  "adminOnly": false
+  "releaseNotes": "رفع باگ حذف پرداخت‌ها و پایداری همگام‌سازی",
+  "isForceUpdate": false
 }
