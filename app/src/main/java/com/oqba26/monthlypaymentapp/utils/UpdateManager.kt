@@ -11,6 +11,7 @@ import android.os.Environment
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
+import com.oqba26.monthlypaymentapp.data.repository.SettingsRepository
 import io.ktor.client.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
@@ -20,6 +21,7 @@ import io.ktor.serialization.kotlinx.json.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
@@ -35,6 +37,8 @@ data class UpdateInfo(
     val url: String,
     val releaseNotes: String,
     val isForceUpdate: Boolean = false,
+    val adminOnly: Boolean = false,
+    val targetDeviceId: String? = null,
 )
 
 sealed class DownloadState {
@@ -44,6 +48,8 @@ sealed class DownloadState {
 }
 
 class UpdateManager(private val context: Context) {
+
+    private val settingsRepository by lazy { SettingsRepository(context) }
 
     private val updateUrl = "https://git.mizbanplatform.ir/oqba26/MonthlyPaymentApp/raw/branch/main/update.json"
 
@@ -58,7 +64,10 @@ class UpdateManager(private val context: Context) {
         }
     }
 
-    suspend fun checkForUpdate(): UpdateInfo? = withContext(Dispatchers.IO) {
+    suspend fun checkForUpdate(
+        isMasterDevice: Boolean? = null,
+        currentDeviceId: String? = null,
+    ): UpdateInfo? = withContext(Dispatchers.IO) {
         cancelPendingSystemDownloads()
         if (!isNetworkAvailable()) return@withContext null
 
@@ -68,6 +77,17 @@ class UpdateManager(private val context: Context) {
 
             val responseText: String = client.get(urlWithParams).bodyAsText()
             val updateInfo: UpdateInfo = json.decodeFromString(responseText)
+
+            // بررسی فیلتر دسترسی آپدیت برای مدیر ارشد یا دستگاه خاص
+            val isMaster = isMasterDevice ?: settingsRepository.isMasterDeviceFlow.first()
+            if (updateInfo.adminOnly && !isMaster) {
+                return@withContext null
+            }
+
+            val deviceId = currentDeviceId ?: getDeviceHardwareId(context)
+            if (!updateInfo.targetDeviceId.isNullOrBlank() && !updateInfo.targetDeviceId.equals(deviceId, ignoreCase = true)) {
+                return@withContext null
+            }
 
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
             val currentVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -166,7 +186,7 @@ class UpdateManager(private val context: Context) {
 
     fun cancelPendingSystemDownloads() {
         try {
-            val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager ?: return
+            val downloadManager = (context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager) ?: return
             val query = DownloadManager.Query()
             val cursor = downloadManager.query(query)
             if (cursor != null) {

@@ -6,6 +6,7 @@ import com.oqba26.monthlypaymentapp.core.manager.BackupManager
 import com.oqba26.monthlypaymentapp.core.manager.ExportManager
 import com.oqba26.monthlypaymentapp.data.model.PaymentRecord
 import com.oqba26.monthlypaymentapp.data.model.Person
+import com.oqba26.monthlypaymentapp.data.remote.VoiceSearchService
 import com.oqba26.monthlypaymentapp.data.repository.LocalPersonRepository
 import com.oqba26.monthlypaymentapp.data.repository.NetworkRepository
 import com.oqba26.monthlypaymentapp.data.repository.SettingsRepository
@@ -43,6 +44,7 @@ class PersonViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val exportManager: ExportManager,
     private val backupManager: BackupManager,
+    private val voiceSearchService: VoiceSearchService,
 ) : ViewModel() {
 
     /** فقط یک بار در هر اجرا snapshot قبل از ادغام گرفته می‌شود. */
@@ -50,6 +52,12 @@ class PersonViewModel @Inject constructor(
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    private val _isRecordingVoice = MutableStateFlow(false)
+    val isRecordingVoice: StateFlow<Boolean> = _isRecordingVoice.asStateFlow()
+
+    private val _isProcessingVoice = MutableStateFlow(false)
+    val isProcessingVoice: StateFlow<Boolean> = _isProcessingVoice.asStateFlow()
 
     private val _isRefreshing = MutableStateFlow(value = false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -344,6 +352,31 @@ class PersonViewModel @Inject constructor(
     }
 
     fun onSearchQueryChange(query: String) { _searchQuery.value = query }
+
+    fun setRecordingVoice(isRecording: Boolean) {
+        _isRecordingVoice.value = isRecording
+    }
+
+    fun processVoiceSearch(audioFile: java.io.File) {
+        viewModelScope.launch {
+            _isProcessingVoice.value = true
+            val result = voiceSearchService.transcribeAudio(audioFile)
+            result.fold(
+                onSuccess = { recognizedText ->
+                    if (recognizedText.isNotBlank()) {
+                        _searchQuery.value = recognizedText
+                    } else {
+                        _toastMessage.emit("صدایی تشخیص داده نشد")
+                    }
+                },
+                onFailure = { error ->
+                    _toastMessage.emit(error.message ?: "خطا در برقراری ارتباط با سرویس صوتی")
+                }
+            )
+            _isProcessingVoice.value = false
+        }
+    }
+
     fun onAddPersonClicked() { _showAddPersonDialog.value = true }
     fun onDismissAddPersonDialog() { _showAddPersonDialog.value = false }
     fun onQuickPayClicked(person: PersonUiModel) { _personForPaymentDialog.value = person }
